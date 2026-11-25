@@ -189,7 +189,8 @@
 
       const form = Object.assign({}, o, {
         courseCode: o.courseCode === '__other' ? '' : o.courseCode,
-        courseType: o.courseCode === '__other' ? o.courseType : ((c && c.type) || o.courseType || 'Nature Guide'),
+        courseType: o.courseCode === '__other' ? o.courseType : ((c && c.type) || 'Other'),
+        courseOther: o.courseCode === '__other' ? o.courseOther : (c && !c.type ? c.code : ''),
         startDate: c ? c.startDate : o.startDate, endDate: c ? c.endDate : o.endDate,
         nights: (() => { const s = c ? c.startDate : o.startDate, en = c ? c.endDate : o.endDate; if (!s || !en) return ''; const n = Math.round((new Date(en) - new Date(s)) / 864e5); return n > 0 ? String(n) : ''; })(),
         campPreference: document.getElementById('b-camp').hidden ? 'Kwapa Training Camp (Okavango Delta)' : o.campPreference,
