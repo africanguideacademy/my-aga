@@ -91,10 +91,10 @@
     $app.innerHTML = `
       <div class="login">
         <div class="hero"><img src="brand/logo-white.png" alt=""><h1>${first ? 'Choose your own PIN' : 'Change your PIN'}</h1>
-          <div class="sub">${first ? 'Welcome! Replace the PIN your trainer gave you with one only you know.' : 'Pick 6 numbers that are easy for you to remember.'}</div></div>
+          <div class="sub">${first ? 'Welcome! Replace the first-time PIN you received (usually by email when you booked) with a PIN only you know.' : 'Pick 6 numbers that are easy for you to remember.'}</div></div>
         <form class="card" id="pin-form">
           <div id="pin-msg"></div>
-          <div class="fld"><label for="old">${first ? 'PIN from your trainer' : 'Current PIN'}</label>
+          <div class="fld"><label for="old">${first ? 'First-time PIN' : 'Current PIN'}</label>
             <input id="old" class="pin-input" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" required></div>
           <div class="fld"><label for="n1">New PIN</label>
             <input id="n1" class="pin-input" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" required></div>
@@ -355,7 +355,7 @@
   function tabDetails(s) {
     const field = ([k, label, type]) => {
       const v = s[k] || '';
-      if (type === 'locked') return `<div class="fld"><label>${label} <span>(ask your trainer to change)</span></label><input value="${esc(v)}" readonly></div>`;
+      if (type === 'locked') return `<div class="fld"><label>${label} <span>(contact the Academy to change)</span></label><input value="${esc(v)}" readonly></div>`;
       if (Array.isArray(type)) return `<div class="fld"><label for="f-${k}">${label}</label><select id="f-${k}" name="${k}">${type.map(o => `<option value="${esc(o)}"${o === v ? ' selected' : ''}>${o || 'Select…'}</option>`).join('')}${v && !type.includes(v) ? `<option selected>${esc(v)}</option>` : ''}</select></div>`;
       return `<div class="fld"><label for="f-${k}">${label}</label><input id="f-${k}" name="${k}" type="${type}" value="${esc(v)}"${type === 'email' ? ' autocomplete="email"' : type === 'tel' ? ' autocomplete="tel"' : ''}></div>`;
     };
