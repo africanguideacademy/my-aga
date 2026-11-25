@@ -69,7 +69,8 @@
           <div class="fld"><label for="pin">PIN <span>(6 numbers)</span></label>
             <input id="pin" name="password" class="pin-input" type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" autocomplete="current-password" required></div>
           <button class="btn btn-primary btn-block" id="login-btn">Log in</button>
-          <p class="hint" style="margin-top:14px">Your Student ID and first PIN come from your trainer. Forgotten your PIN? Ask your trainer to reset it.</p>
+          <p class="hint" style="margin-top:14px">Your Student ID and first PIN are emailed to you when you book. Forgotten your PIN? Ask reservations or your trainer to reset it.</p>
+          <a class="btn btn-block" href="#/book" style="margin-top:4px">New student? Book a course</a>
         </form>
       </div>`;
     const f = document.getElementById('login-form');
@@ -209,7 +210,14 @@
       const head = `<div class="bk-when"><b>${esc(b.courseType)} · ${esc(b.courseCode)}</b><span>${esc(when)}${b.venue ? ' · ' + esc(b.venue) : ''}</span></div>`;
       if (b.status === 'Confirmed') return `<div class="card full booking ok-b"><h2>${IC.check} You’re confirmed</h2>${head}
         <p class="hint" style="margin:8px 0 0">Thank you. Before the course, please make sure your details, photo and passport copy are up to date.</p></div>`;
-      if (b.status === 'Declined') return `<div class="card full booking no-b"><h2>${IC.alert} You declined this course</h2>${head}
+      if (b.status === 'Form received' || b.status === 'Invoiced' || b.status === 'Deposit paid') {
+        const steps = ['Form received', 'Invoiced', 'Deposit paid', 'Confirmed'], at = steps.indexOf(b.status);
+        return `<div class="card full booking"><h2>${IC.cal} Your booking</h2>${head}
+          <div class="chips" style="margin-top:10px">${steps.map((s, i) => `<span class="badge ${i <= at ? 'pass' : 'pend'}">${i <= at ? '✓ ' : ''}${s}</span>`).join('')}</div>
+          <p class="hint" style="margin:8px 0 0">${b.status === 'Form received' ? 'Thank you for your booking form. Reservations will send your invoice; your place is provisional until the deposit is paid.'
+            : b.status === 'Invoiced' ? 'Your invoice has been sent. Please pay the deposit using your invoice number as the reference.' : 'Deposit received, thank you. Reservations will confirm your place.'}</p></div>`;
+      }
+      if (b.status === 'Declined' || b.status === 'Cancelled') return `<div class="card full booking no-b"><h2>${IC.alert} ${b.status === 'Cancelled' ? 'This booking was cancelled' : 'You declined this course'}</h2>${head}
         <p class="hint" style="margin:8px 0 0">Changed your mind? Contact AGA reservations and we’ll do our best to help.</p></div>`;
       return `<div class="card full booking" data-bk="${esc(b.bookingId)}"><h2>${IC.cal} Please confirm your place</h2>${head}
         <div class="form-actions"><button class="btn btn-primary" data-resp="Confirmed">Yes, I’ll be there</button>
@@ -444,6 +452,12 @@
 
   // ---------- start ----------
   document.getElementById('logout-btn').onclick = () => logout(false);
-  state.token = store.get('myaga_token');
-  state.token ? load() : viewLogin();
+  // #/book = the public booking form; anything else = My AGA (login)
+  function route() {
+    if (/^#\/book/.test(location.hash)) return window.MyAgaBook.render($app);
+    state.token = store.get('myaga_token');
+    state.token ? load() : viewLogin();
+  }
+  window.addEventListener('hashchange', route);
+  route();
 })();

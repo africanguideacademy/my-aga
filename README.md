@@ -18,7 +18,22 @@ Each AGA student logs in with their **Student ID + 6-number PIN**. They can then
 | Change log | Same sheet, tab **Portal Changes** (every edit and upload a student makes, with the old and new value) |
 | Uploads | The student's normal folder: `My Drive/Training/Student Profiles/Surname_First_ID/` |
 
-## Bookings (how most students get their login)
+## Digital booking form (the main way in)
+
+`https://africanguideacademy.github.io/my-aga/#/book` is public, with no login. Add `?course=CODE` to have the course already chosen. It is the AGA Course Booking Form online, with the same sections, plus the **camp choice** for courses from June 2027 (Kalahari Training Camp opens): 28 days Kwapa, 28 days Kalahari, 14 + 14, or no preference, subject to space.
+
+On submit (`AGA Student Profiles/BookingForm.js`):
+- **New student:** a profile is created with all matching details filled in.
+- **Existing student** (matched on Omang/passport, or on name when an ID is missing): only blank fields are filled. Differences are logged in *Portal Changes* for checking, and login details go only to the email already on the profile.
+- A **Bookings** row is added (status *Form received*), and the full answers go to the **Booking Forms** tab.
+- A **PDF of the completed form** is saved in the student's Drive folder.
+- Reservations get an email with the PDF. The student gets a copy plus their My AGA login.
+- Statuses run Form received → Invoiced → Deposit paid → Confirmed (or Declined/Cancelled). Reservations set them in the Bookings tab, and students see the progress in My AGA.
+- Spam guards: a hidden honeypot field, at most 60 submissions an hour, and at most 5 per email address an hour.
+
+Links to the 6 declaration documents are set in `config.js` (`BOOKING_DOCS`).
+
+## Bookings entered by reservations
 
 1. Reservations open the **📨 Bookings** tab in the Student Profile System and fill in the basics from the booking form: name, email, cell, course.
 2. The system then:
