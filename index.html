@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My AGA — African Guide Academy</title>
+<meta name="description" content="Your African Guide Academy student profile, progress and to-do list.">
+<meta name="theme-color" content="#3d0f07">
+<link rel="icon" href="icons/favicon-64.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a href="https://www.guidetrainingcourses.com" target="_blank" rel="noopener"><img class="top-logo" src="brand/logo-colour.png" alt="African Guide Academy"></a>
+    <div class="top-right">
+      <span class="top-name" id="top-name"></span>
+      <button class="btn" id="logout-btn" hidden>Log out</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="app">
+  <!-- Rendered by app.js -->
+  <div class="loading"><div class="spinner"></div></div>
+</main>
+
+<footer class="wrap foot">
+  <span>My AGA · African Guide Academy</span>
+  <span><a href="https://africanguideacademy.github.io/aga-study/" target="_blank" rel="noopener">Pocket Guide</a> · <a href="https://www.guidetrainingcourses.com" target="_blank" rel="noopener">guidetrainingcourses.com</a></span>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script src="config.js?v=1"></script>
+<script src="demo.js?v=1"></script>
+<script src="recommendations.js?v=1"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>
