@@ -154,6 +154,7 @@
     render();
     authed({ portal: 'docs' }).then(d => { state.docs = d.ok ? d.docs : []; if (state.tab === 'details') render(); });
     authed({ portal: 'materials' }).then(m => { state.materials = m && m.ok ? m : null; if (state.tab === 'overview') render(); });
+    authed({ portal: 'workbooks' }).then(w => { state.workbooks = w && w.ok ? w : null; if (state.tab === 'overview') render(); });
   }
 
   // ---------- main view ----------
@@ -324,7 +325,8 @@
   }
   function tabOverview(s, recs, courses, notes) {
     const latestNote = notes[0];
-    return `<div class="grid">${bookingCards()}${materialsCard()}
+    const wbs = state.workbooks, wbCard = wbs && window.MyAgaWorkbook ? window.MyAgaWorkbook.card(wbs.workbooks, wbs.locked, wbs.message) : '';
+    return `<div class="grid">${bookingCards()}${wbCard}${materialsCard()}
       <div class="card full"><h2>${IC.list} Your to-do list</h2>
         <p class="hint">Made from your latest results, trainer scores and profile. Red first, then orange; green means well done.</p>
         ${recList(recs)}</div>
@@ -537,6 +539,14 @@
   function route() {
     if (/^#\/book/.test(location.hash)) return window.MyAgaBook.render($app);
     state.token = store.get('myaga_token');
+    const wbm = location.hash.match(/^#\/wb\/(\w+)/);
+    if (wbm) {   // a digital workbook (workbook.js)
+      const open = () => { document.getElementById('logout-btn').hidden = false; window.scrollTo(0, 0);
+        window.MyAgaWorkbook.render($app, wbm[1], { authed, toast, shrinkImage }); };
+      if (state.token) return open();
+      return resume().then(ok => ok ? open() : viewLogin());
+    }
+    if (state.me && /^#\/?$/.test(location.hash)) { state.tab = 'overview'; render(); authed({ portal: 'workbooks' }).then(w => { state.workbooks = w && w.ok ? w : null; if (state.tab === 'overview' && !location.hash.startsWith('#/wb')) render(); }); return; }
     if (state.token) return load();
     resume().then(ok => ok ? load() : viewLogin());
   }
