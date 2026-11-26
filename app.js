@@ -308,12 +308,14 @@
     if (m.locked) return `<div class="card full"><h2>${IC.file} Course materials 🔒</h2><p class="hint" style="margin:0">${esc(m.message)}</p></div>`;
     const list = m.materials || [];
     if (!list.length) return `<div class="card full"><h2>${IC.file} Course materials</h2><p class="hint" style="margin:0">${esc(m.message || '')}</p></div>`;
-    let html = '', last = '';
-    list.forEach(x => {
-      if (x.group !== last) { html += (last ? '</ul>' : '') + `<div class="mat-group">${esc(x.group)}</div><ul class="mat-list">`; last = x.group; }
-      html += `<li>${IC.file}<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a></li>`;
-    });
-    return `<div class="card full"><h2>${IC.file} Course materials</h2><p class="hint" style="margin:0">Your manual, workbooks and apps for your course.</p>${html}</ul></div>`;
+    // Tidy groups, each folds open on its own: the 13 printable workbooks get their own group
+    const groups = {}, order = [];
+    const add = (g, x) => { if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(x); };
+    list.forEach(x => add(/^Workbook \d/i.test(x.name) ? 'Nature Guide workbooks (PDF to download or print)' : x.group === 'All courses' ? 'For every course: books, apps, maps and forms' : x.group + ' course', x));
+    order.sort((a, b) => (/^For every/.test(a) ? 0 : /workbooks/.test(a) ? 2 : 1) - (/^For every/.test(b) ? 0 : /workbooks/.test(b) ? 2 : 1));
+    const html = order.map(g => `<details class="mat-det"><summary><span>${esc(g)}</span><span class="mat-n">${groups[g].length}</span></summary>
+      <ul class="mat-list">${groups[g].map(x => `<li>${IC.file}<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a></li>`).join('')}</ul></details>`).join('');
+    return `<div class="card full"><h2>${IC.file} Course materials</h2><p class="hint">Your manual, workbooks and apps for your course. Tap a group to open it.</p>${html}</div>`;
   }
 
   // Apps and course links open once a deposit is received. Students with past courses and

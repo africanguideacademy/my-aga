@@ -348,3 +348,14 @@ button, input, select { font-family: inherit; }
   .wb-log-row { grid-template-columns: 1fr 1fr; padding-bottom: 8px; border-bottom: 1px dashed var(--line, #e2d9cf); }
   .wb-log-row label span { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 3px; }
 }
+
+/* Course materials: groups that fold open */
+.mat-det { border: 1px solid var(--line, #e2d9cf); border-radius: 12px; margin-top: 8px; background: #fff; }
+.mat-det summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 14px; font-weight: 600; font-size: 14px; }
+.mat-det summary::-webkit-details-marker { display: none; }
+.mat-det summary span:first-child { flex: 1; }
+.mat-det summary::after { content: ''; width: 8px; height: 8px; border-right: 2px solid var(--brand); border-bottom: 2px solid var(--brand); transform: rotate(45deg); margin: -4px 4px 0; transition: transform .2s; }
+.mat-det[open] summary::after { transform: rotate(-135deg); margin-top: 4px; }
+.mat-n { font-size: 11px; font-weight: 700; color: var(--brand); background: var(--gold-light, #fbecd2); border-radius: 99px; padding: 2px 8px; }
+.mat-det .mat-list { margin: 0; padding: 0 14px 8px; }
+.mat-det[open] summary { border-bottom: 1px solid var(--line, #e2d9cf); }
