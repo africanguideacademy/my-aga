@@ -17,10 +17,12 @@
   }
   async function demoApi(p) {
     await new Promise(r => setTimeout(r, 400));
-    if (p.portal === 'courses') return { ok: true, kalahariFrom: '2027-06-01', docs: DOCS.map(d => d[0]), courses: [
-      { code: '2702 KWP NG', type: 'Nature Guide', startDate: '2027-02-01', endDate: '2027-02-28', venue: 'Kwapa Camp' },
-      { code: '2707 NG', type: 'Nature Guide', startDate: '2027-07-05', endDate: '2027-08-01', venue: '' },
-      { code: '2708 KWP TG', type: 'Trails Guide', startDate: '2027-08-09', endDate: '2027-08-30', venue: 'Kwapa Camp' }] };
+    if (p.portal === 'courses') return { ok: true, kalahariFrom: '2027-06-01', docs: DOCS.map(d => d[0]), parts: [
+      { code: '2702 KWP NG-A', type: 'Nature Guide', part: 'A', startDate: '2027-02-05', endDate: '2027-02-19', kwpLeft: 13, klhLeft: 0 },
+      { code: '2702 KWP NG-B', type: 'Nature Guide', part: 'B', startDate: '2027-02-19', endDate: '2027-03-05', kwpLeft: 0, klhLeft: 0 },
+      { code: '2707 KWP NG-A', type: 'Nature Guide', part: 'A', startDate: '2027-06-25', endDate: '2027-07-09', kwpLeft: 9, klhLeft: 8 },
+      { code: '2707 KWP NG-B', type: 'Nature Guide', part: 'B', startDate: '2027-07-09', endDate: '2027-07-23', kwpLeft: 11, klhLeft: 6 },
+      { code: '2710 KWP TG-A', type: 'Trails Guide', part: 'A', startDate: '2027-10-01', endDate: '2027-10-15', kwpLeft: 7, klhLeft: 0 }] };
     if (p.portal === 'bookingForm') return { ok: true, bookingId: 'BK-DEMO', studentId: 'STU-DEMO', loginSentTo: 'same' };
     return { ok: false };
   }
@@ -49,27 +51,31 @@
       <form id="bf" class="bf" novalidate>
         <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
         ${section('1. Your course', `
-          <div class="fld wide"><label for="b-courseCode">Which course? *</label><select id="b-courseCode" name="courseCode"><option value="">Loading courses…</option></select></div>
+          ${radios('courseType', 'Which course?', ['Nature Guide', 'Trails Guide', 'Wilderness Trails', 'Track & Sign', 'Other'], { req: true, wide: true })}
+          <div id="b-parts" class="wide"><p class="hint" style="margin:0">Loading course dates…</p></div>
+          <label class="opt wide" id="b-nl-wrap"><input type="checkbox" id="b-nl"><span>My course or dates are not listed</span></label>
           <div id="b-notlisted" class="wide form" hidden>
-            ${radios('courseType', 'Type of course', ['Nature Guide', 'Trails Guide', 'Wilderness Trails', 'Track & Sign', 'Other'], { req: true, wide: true })}
             ${txt('courseOther', 'Other course', { hint: '(if "Other")' })}
             ${txt('courseLevel', 'Course level', { hint: '(if known)' })}
             ${txt('startDate', 'Preferred start', { type: 'date' })}${txt('endDate', 'Preferred finish', { type: 'date' })}
           </div>
-          <div id="b-camp" class="wide" hidden>${radios('campPreference', 'Where would you like to study? *', CAMPS, { wide: true })}
-            <p class="hint" style="margin:6px 0 0">A full course is 28 days. From June 2027 you can study at Kwapa (Okavango Delta), at our new Kalahari Training Camp, or 14 days in each. Subject to space.</p></div>
-        `)}
+        `, 'Our courses run in <b>2-week parts</b>: <b>Part A</b> is the first two weeks and <b>Part B</b> the second two weeks. A full Nature Guide or Trails Guide course is Part A + Part B. Tick every part you want: one part, both parts, or two courses in a row. For each part choose where you would like to study (Kwapa in the Okavango Delta, or our Kalahari Training Camp where it is offered).<br><b>Fees per 2-week part:</b> International EUR 3,850 · SADC (citizens and permanent residents of African countries) P 17,500. Single tent supplement: 20% (International) or 30% (SADC).')}
         ${section('2. How did you book?', `
           ${radios('bookedVia', 'Booked', ['Direct with AGA', 'Through an agent', 'Through a safari company', 'Other'], { req: true, wide: true })}
           ${txt('bookedViaName', 'Agent / company name', { hint: '(if not direct)', wide: true })}
           ${radios('paymentMethod', 'Payment method', ['EFT', 'Cash', 'Credit card', 'Cheque'], { req: true, wide: true })}
-          <p class="hint wide" style="margin:0">When paying, use your <b>invoice number</b> as the reference and send proof of payment to info@guidetrainingcourses.com.</p>
+          <p class="hint wide" style="margin:0">When paying, use your <b>invoice number</b> as the reference, then upload your proof of payment in My AGA (or email it to reservations@guidetrainingcourses.com). Your place is confirmed once the deposit is received.</p>
         `)}
-        ${section('3. Your goal', `
-          <div class="fld wide"><label>What is the aim of your course?</label><div class="opts">
-            ${['Personal enrichment', 'FGASA qualification', 'BQA qualification'].map(g => `<label class="opt"><input type="checkbox" name="goal" value="${g}"><span>${g}</span></label>`).join('')}</div></div>
+        ${section('3. Qualification or personal enrichment?', `
+          <div class="fld wide"><div class="opts study-for">
+            <label class="opt"><input type="radio" name="studyFor" value="qualification"><span><b>Study for a qualification</b><br><small>Complete the workbooks and assessments for a BQA and/or FGASA qualification.</small></span></label>
+            <label class="opt"><input type="radio" name="studyFor" value="enrichment"><span><b>Personal enrichment</b><br><small>No exams, no stress. Learn alongside the others and choose which activities you join.</small></span></label>
+          </div></div>
+          <div class="fld wide" id="b-quals" hidden><label>Which qualification(s)?</label><div class="opts">
+            ${['BQA qualification', 'FGASA qualification'].map(g => `<label class="opt"><input type="checkbox" name="goal" value="${g}"><span>${g}</span></label>`).join('')}</div>
+            <p class="hint" style="margin:6px 0 0">Studying for <b>FGASA</b>: the workbook must be completed and submitted at least 2 weeks before the course. For BQA it is strongly recommended. Book at least 60 days ahead to give yourself time to prepare.</p></div>
           ${txt('goalOther', 'Anything else about your goal?', { wide: true, max: 300 })}
-        `)}
+        `, 'Every course is open to you either way.')}
         ${section('4. Your personal details', `
           ${txt('surname', 'Surname', { req: true, ac: 'family-name' })}${txt('firstNames', 'First names', { req: true, ac: 'given-name' })}
           ${radios('gender', 'Gender', ['Male', 'Female', 'Other', 'Prefer not to say'], { req: true, wide: true })}
@@ -89,7 +95,7 @@
           ${txt('departureDate', 'Date of departure', { type: 'date' })}${txt('departureFlight', 'Departure flight no.')}${txt('departureTime', 'Departure time', { type: 'time' })}
         `, '<b>Pick-up:</b> we collect all students from the Duck Café across the road from Maun Airport at <b>14h00</b> on the first day. <b>Drop-off:</b> Maun Airport at around <b>11h00</b> on the last day. All extras are settled at camp before departure.')}
         ${section('6. Accommodation, food and extras', `
-          ${radios('accommodation', 'Accommodation', [['Single', 'Single (30% single supplement)'], ['Double', 'Double (sharing)']], { req: true, wide: true })}
+          ${radios('accommodation', 'Accommodation', [['Single', 'Single (supplement: 20% International, 30% SADC)'], ['Double', 'Double (sharing)']], { req: true, wide: true })}
           <p class="hint wide" style="margin:0">High-wall meru-style tent (3 × 4 m) with en-suite flush toilet and bucket shower. Bedding and a towel are provided.</p>
           ${txt('dietary', 'Dietary requirements', { ph: 'e.g. vegetarian, vegan, none' })}${txt('foodAllergies', 'Food allergies', { ph: 'None' })}
           <p class="hint wide" style="margin:0">Students may not change to vegetarian/vegan once on course: tell us now so we can cater. Drinks are for your own account (buy them in Maun on arrival).</p>
@@ -136,26 +142,54 @@
       });
       return o;
     };
-    const courseSel = f.elements.courseCode;
-    const updateCourse = () => {
-      const c = courses.find(x => x.code === courseSel.value);
-      document.getElementById('b-notlisted').hidden = courseSel.value !== '__other';
-      const start = c ? c.startDate : f.elements.startDate.value;
-      const campBox = document.getElementById('b-camp');
-      campBox.hidden = !(start && start >= kalahariFrom && !/trail|track/i.test((c && c.type) || collect().courseType || ''));
+    // ---- course parts: 2-week parts with places left and a camp choice per part ----
+    const partsBox = document.getElementById('b-parts'), nl = document.getElementById('b-nl');
+    const typeNow = () => (f.querySelector('input[name="courseType"]:checked') || {}).value || '';
+    const places = n => n == null ? 'places available' : n > 0 ? n + (n === 1 ? ' place' : ' places') + ' left' : 'full';
+    const renderParts = () => {
+      const type = typeNow(), keep = {};
+      partsBox.querySelectorAll('.part-row').forEach(r => { const cb = r.querySelector('input'); if (cb.checked) keep[cb.dataset.part] = (r.querySelector('select') || {}).value || true; });
+      const list = courses.filter(p => p.type === type);
+      if (!type) partsBox.innerHTML = '<p class="hint" style="margin:0">Choose your course to see the dates.</p>';
+      else if (!list.length) partsBox.innerHTML = `<p class="hint" style="margin:0">${type === 'Other' ? 'Tell us about the course you want below.' : 'No upcoming dates are listed for this course yet. Tick “not listed” and tell us your preferred dates.'}</p>`;
+      else {
+        const groups = [];
+        list.forEach(p => { const k = p.code.replace(/-[AB]$/, ''); let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, items: [] }); g.items.push(p); });
+        partsBox.innerHTML = groups.map(g => `<div class="part-group"><div class="part-head">${esc(g.items[0].type)} starting ${esc(fmt(g.items[0].startDate))}</div>` +
+          g.items.map(p => {
+            const kwp = p.kwpLeft == null || p.kwpLeft > 0, klh = p.klhLeft == null ? (p.startDate >= kalahariFrom && /nature|trails guide/i.test(p.type)) : p.klhLeft > 0;
+            const camps = [kwp ? ['Kwapa', 'Kwapa (Okavango Delta)' + (p.kwpLeft != null ? ' · ' + places(p.kwpLeft) : '')] : null,
+              klh ? ['Kalahari', 'Kalahari Training Camp' + (p.klhLeft != null ? ' · ' + places(p.klhLeft) : '')] : null].filter(Boolean);
+            const full = !camps.length;
+            const campUi = full ? '<span class="part-full">Full</span>' : camps.length === 1 ? `<span class="part-one" data-camp="${camps[0][0]}">${esc(camps[0][1])}</span>`
+              : `<select aria-label="Where would you like to study?">${camps.map(c => `<option value="${c[0]}">${esc(c[1])}</option>`).join('')}</select>`;
+            return `<div class="part-row${full ? ' is-full' : ''}"><label class="opt"><input type="checkbox" data-part="${esc(p.code)}"${full ? ' disabled' : ''}>
+              <span><b>${p.part ? 'Part ' + esc(p.part) : esc(p.code)}</b> · ${esc(fmt(p.startDate))}${p.endDate ? ' – ' + esc(fmt(p.endDate)) : ''} <small>${esc(p.code)}</small></span></label>
+              <div class="part-camp">${campUi}</div></div>`;
+          }).join('') + '</div>').join('');
+        partsBox.querySelectorAll('.part-row').forEach(r => { const cb = r.querySelector('input'), v = keep[cb.dataset.part];
+          if (v && !cb.disabled) { cb.checked = true; const s = r.querySelector('select'); if (s && v !== true) s.value = v; } });
+      }
+      document.getElementById('b-notlisted').hidden = !(nl.checked || type === 'Other');
     };
-    courseSel.addEventListener('change', updateCourse);
-    f.addEventListener('change', () => { updateCourse(); const o = collect(); delete o.signName; store.set(DRAFT_KEY, o); });
+    const chosenParts = () => Array.from(partsBox.querySelectorAll('.part-row')).filter(r => r.querySelector('input').checked).map(r => {
+      const s = r.querySelector('select'), one = r.querySelector('.part-one');
+      return { code: r.querySelector('input').dataset.part, camp: s ? s.value : (one ? one.dataset.camp : 'Kwapa') };
+    });
+    const updateStudy = () => { document.getElementById('b-quals').hidden = (f.querySelector('input[name="studyFor"]:checked') || {}).value !== 'qualification'; };
+    f.addEventListener('change', e => { if (e.target.name === 'studyFor') updateStudy(); if (e.target.name === 'courseType' || e.target === nl) renderParts(); const o = collect(); delete o.signName; store.set(DRAFT_KEY, o); });
     f.addEventListener('input', () => { const o = collect(); store.set(DRAFT_KEY, o); });
 
     api({ portal: 'courses' }).then(r => {
-      courses = (r && r.ok && r.courses) || []; kalahariFrom = (r && r.kalahariFrom) || kalahariFrom;
-      courseSel.innerHTML = '<option value="">Choose your course…</option>' +
-        courses.map(c => `<option value="${esc(c.code)}">${esc((c.type ? c.type + ' · ' : '') + fmt(c.startDate) + (c.endDate ? ' – ' + fmt(c.endDate) : '') + ' · ' + c.code)}</option>`).join('') +
-        '<option value="__other">My course or dates are not listed</option>';
-      restore();
-      if (pre && courses.some(c => c.code === pre)) courseSel.value = pre;
-      updateCourse();
+      kalahariFrom = (r && r.kalahariFrom) || kalahariFrom;
+      // New: parts with places left. Older backend: plain course list (places unknown)
+      courses = (r && r.ok && (r.parts || (r.courses || []).map(c => ({ code: c.code, type: c.type, part: (c.code.match(/-([AB])$/) || [])[1] || '',
+        startDate: c.startDate, endDate: c.endDate, kwpLeft: null, klhLeft: null })))) || [];
+      restore(); updateStudy();
+      const p = pre && courses.find(c => c.code === pre);
+      if (p) { const rb = f.querySelector(`input[name="courseType"][value="${p.type}"]`); if (rb) rb.checked = true; }
+      renderParts();
+      if (p) { const cb = partsBox.querySelector(`input[data-part="${CSS.escape(p.code)}"]`); if (cb && !cb.disabled) cb.checked = true; }
     });
 
     // signature pad
@@ -173,28 +207,33 @@
       e.preventDefault();
       const o = collect(), msg = document.getElementById('bf-msg');
       const showErr = t => { msg.innerHTML = `<div class="err">${esc(t)}</div>`; msg.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
-      const c = courses.find(x => x.code === o.courseCode);
-      if (!o.courseCode) return showErr('Please choose your course (or "My course or dates are not listed").');
+      const sel = chosenParts(), notListed = nl.checked || o.courseType === 'Other';
+      if (!o.courseType) return showErr('Please choose your course.');
+      if (!sel.length && !notListed) return showErr('Please tick the part(s) you want to book, or “My course or dates are not listed”.');
+      const selP = sel.map(s => courses.find(c => c.code === s.code)).filter(Boolean).sort((a, b) => a.startDate.localeCompare(b.startDate));
       const missing = [];
       [['surname', 'surname'], ['firstNames', 'first names'], ['gender', 'gender'], ['nationality', 'nationality'], ['omangPassport', 'passport/Omang number'],
         ['dateOfBirth', 'date of birth'], ['cellNumber', 'cell number'], ['email', 'email'], ['bookedVia', 'how you booked'], ['paymentMethod', 'payment method'],
         ['accommodation', 'accommodation'], ['readWriteEnglish', 'read/write English'], ['driversLicence', 'driver’s licence'], ['firstAidCert', 'First Aid certificate'],
         ['signName', 'your full name in the declaration']].forEach(([k, l]) => { if (!o[k]) missing.push(l); });
-      if (o.courseCode === '__other' && !o.courseType) missing.push('type of course');
-      if (!document.getElementById('b-camp').hidden && !o.campPreference) missing.push('where you would like to study');
+      if (!o.studyFor) missing.push('qualification or personal enrichment');
+      else if (o.studyFor === 'qualification' && !(o.goal || []).length) missing.push('which qualification (BQA and/or FGASA)');
       if (missing.length) return showErr('Please fill in: ' + missing.join(', ') + '.');
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email)) return showErr('Please check your email address.');
       if (DOCS.some((d, i) => !o['agree' + i])) return showErr('Please tick all ' + DOCS.length + ' agreements in the declaration.');
       if (!signed) return showErr('Please sign in the signature box.');
 
+      const s0 = selP.length ? selP[0].startDate : o.startDate, e0 = selP.length ? selP[selP.length - 1].endDate : o.endDate;
       const form = Object.assign({}, o, {
-        courseCode: o.courseCode === '__other' ? '' : o.courseCode,
-        courseType: o.courseCode === '__other' ? o.courseType : ((c && c.type) || 'Other'),
-        courseOther: o.courseCode === '__other' ? o.courseOther : (c && !c.type ? c.code : ''),
-        startDate: c ? c.startDate : o.startDate, endDate: c ? c.endDate : o.endDate,
-        nights: (() => { const s = c ? c.startDate : o.startDate, en = c ? c.endDate : o.endDate; if (!s || !en) return ''; const n = Math.round((new Date(en) - new Date(s)) / 864e5); return n > 0 ? String(n) : ''; })(),
-        campPreference: document.getElementById('b-camp').hidden ? 'Kwapa Training Camp (Okavango Delta)' : o.campPreference,
-        bookedVia: o.bookedVia, learnerGoal: [].concat(o.goal || [], o.goalOther ? [o.goalOther] : []).join('; '),
+        courseCode: selP.length ? selP[0].code : '',
+        parts: sel,
+        courseType: o.courseType,
+        courseOther: o.courseOther || '',
+        startDate: s0, endDate: e0,
+        nights: (() => { if (!s0 || !e0) return ''; const n = Math.round((new Date(e0) - new Date(s0)) / 864e5); return n > 0 ? String(n) : ''; })(),
+        campPreference: sel.length ? sel.map(x => x.code + ': ' + x.camp).join('; ') : 'Not listed yet',
+        bookedVia: o.bookedVia,
+        learnerGoal: [].concat(o.studyFor === 'enrichment' ? ['Personal enrichment (no exams)'] : (o.goal || []), o.goalOther ? [o.goalOther] : []).join('; '),
         agree: DOCS.map((d, i) => !!o['agree' + i]), signature: trimSig(cv)
       });
       const btn = document.getElementById('bf-send'); btn.disabled = true; btn.textContent = 'Sending your booking…';

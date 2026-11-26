@@ -197,3 +197,23 @@ button, input, select { font-family: inherit; }
   .form { grid-template-columns: 1fr; }
   .tabs { margin-left: -12px; margin-right: -12px; padding: 0 12px; }
 }
+
+/* Booking form: 2-week parts with camp choice */
+.part-group { border: 1px solid var(--line, #e3dbd1); border-radius: 12px; padding: 10px 12px; margin: 8px 0; background: #fff; }
+.part-head { font-weight: 700; font-size: 13px; margin-bottom: 6px; color: var(--brand, #6e1e10); }
+.part-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-top: 1px dashed var(--line, #e3dbd1); }
+.part-row:first-of-type { border-top: 0; }
+.part-row .opt { margin: 0; }
+.part-row small { color: var(--muted, #8b7e74); margin-left: 4px; }
+.part-camp select { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line, #d9d0c5); font: inherit; font-size: 13px; max-width: 100%; }
+.part-one { font-size: 13px; color: var(--muted, #8b7e74); }
+.part-full { font-size: 12px; font-weight: 700; color: var(--bad, #9b2c22); }
+.part-row.is-full { opacity: .6; }
+/* My AGA: course materials */
+.mat-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.mat-list li { display: flex; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line, #e3dbd1); }
+.mat-list li:first-child { border-top: 0; }
+.mat-group { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted, #8b7e74); margin-top: 10px; }
+
+.study-for .opt { align-items: flex-start; flex: 1 1 240px; }
+.study-for small { color: var(--muted, #8b7e74); font-weight: 400; }

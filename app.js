@@ -136,6 +136,7 @@
     document.getElementById('top-name').textContent = r.student.firstNames + ' ' + r.student.surname;
     render();
     authed({ portal: 'docs' }).then(d => { state.docs = d.ok ? d.docs : []; if (state.tab === 'details') render(); });
+    authed({ portal: 'materials' }).then(m => { state.materials = m && m.ok ? m : null; if (state.tab === 'overview') render(); });
   }
 
   // ---------- main view ----------
@@ -260,9 +261,24 @@
     });
   }
 
+  // Course materials (manual, workbooks, apps): open once the deposit is received
+  function materialsCard() {
+    const m = state.materials;
+    if (!m || !(state.me.bookings || []).length) return '';
+    if (m.locked) return `<div class="card full"><h2>${IC.file} Course materials 🔒</h2><p class="hint" style="margin:0">${esc(m.message)}</p></div>`;
+    const list = m.materials || [];
+    if (!list.length) return `<div class="card full"><h2>${IC.file} Course materials</h2><p class="hint" style="margin:0">${esc(m.message || '')}</p></div>`;
+    let html = '', last = '';
+    list.forEach(x => {
+      if (x.group !== last) { html += (last ? '</ul>' : '') + `<div class="mat-group">${esc(x.group)}</div><ul class="mat-list">`; last = x.group; }
+      html += `<li>${IC.file}<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a></li>`;
+    });
+    return `<div class="card full"><h2>${IC.file} Course materials</h2><p class="hint" style="margin:0">Your manual, workbooks and apps for your course.</p>${html}</ul></div>`;
+  }
+
   function tabOverview(s, recs, courses, notes) {
     const latestNote = notes[0];
-    return `<div class="grid">${bookingCards()}
+    return `<div class="grid">${bookingCards()}${materialsCard()}
       <div class="card full"><h2>${IC.list} Your to-do list</h2>
         <p class="hint">Made from your latest results, trainer scores and profile. Red first, then orange; green means well done.</p>
         ${recList(recs)}</div>

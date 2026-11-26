@@ -46,8 +46,11 @@
           if (p.response === 'Declined' && !p.reason) return { ok: false, error: 'Please tell us why you can’t attend.' };
           b.status = p.response; b.reason = p.reason || ''; return { ok: true, status: b.status }; }
         case 'me': return { ok: true, student: JSON.parse(JSON.stringify(student)), bookings: JSON.parse(JSON.stringify(bookings)), editable: Object.keys(student).filter(k => ['nickname', 'gender', 'nationality', 'omangPassport', 'passportExpiry', 'dateOfBirth', 'placeOfBirth', 'cellNumber', 'email', 'employerPrivate', 'highestEducation', 'firstAidCert', 'driversLicence', 'bqaNo', 'fgasaNo'].includes(k)),
-          docTypes: ['Passport / Omang copy', 'First Aid certificate', 'Drivers licence', 'Highest education certificate', 'CV', 'FGASA / BQA document', 'Other'] };
+          docTypes: ['Proof of payment', 'Passport / Omang copy', 'First Aid certificate', 'Drivers licence', 'Highest education certificate', 'CV', 'FGASA / BQA document', 'Other'] };
         case 'docs': return { ok: true, docs };
+        case 'materials': return bookings.some(b => b.status === 'Deposit paid' || b.status === 'Paid in full')
+          ? { ok: true, locked: false, materials: [{ group: 'Nature Guide', name: 'AGA Nature Guide Manual (7th edition)', url: '#' }, { group: 'Nature Guide', name: 'Workbook - Birds', url: '#' }] }
+          : { ok: true, locked: true, message: 'Your course manual, workbooks and apps open here once your deposit has been received.' };
         case 'updateDetails': Object.assign(student, p.fields); return { ok: true, changed: Object.keys(p.fields) };
         case 'uploadPhoto': student.photoUrl = 'demo'; student.photoThumb = 'data:' + p.mimeType + ';base64,' + p.base64; return { ok: true, photoThumb: student.photoThumb };
         case 'uploadDoc': { const name = p.docType + ' - demo (uploaded by student)'; docs.unshift({ name, url: '#', size: Math.round(p.base64.length * .75 / 1024) + ' KB', date: 'today', mimeType: p.mimeType }); return { ok: true, name }; }
