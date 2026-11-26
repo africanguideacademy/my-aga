@@ -208,14 +208,18 @@
     return list.map(b => {
       const when = b.startDate ? fmtDate(b.startDate) + (b.endDate ? ' – ' + fmtDate(b.endDate) : '') : 'Dates to be confirmed';
       const head = `<div class="bk-when"><b>${esc(b.courseType)} · ${esc(b.courseCode)}</b><span>${esc(when)}${b.venue ? ' · ' + esc(b.venue) : ''}</span></div>`;
-      if (b.status === 'Confirmed') return `<div class="card full booking ok-b"><h2>${IC.check} You’re confirmed</h2>${head}
-        <p class="hint" style="margin:8px 0 0">Thank you. Before the course, please make sure your details, photo and passport copy are up to date.</p></div>`;
-      if (b.status === 'Form received' || b.status === 'Invoiced' || b.status === 'Deposit paid') {
-        const steps = ['Form received', 'Invoiced', 'Deposit paid', 'Confirmed'], at = steps.indexOf(b.status);
+      // The place is confirmed once the deposit is received
+      const popBtn = `<div class="form-actions"><button class="btn btn-primary" data-pop="${esc(b.bookingId)}">Upload proof of payment</button>${b.popOn ? `<span class="hint">✓ Proof of payment received ${esc(fmtDate(b.popOn))}</span>` : ''}</div>`;
+      if (b.status === 'Deposit paid' || b.status === 'Paid in full') return `<div class="card full booking ok-b"><h2>${IC.check} Your place is confirmed</h2>${head}
+        <p class="hint" style="margin:8px 0 0">${b.status === 'Paid in full' ? 'Paid in full, thank you.' : 'Deposit received, thank you.'} Before the course, please make sure your details, photo and passport copy are up to date.</p></div>`;
+      if (b.status === 'Confirmed' || b.status === 'Form received' || b.status === 'Invoiced') {
+        const steps = ['Form received', 'Invoiced', 'Deposit paid', 'Place confirmed'], at = b.status === 'Invoiced' ? 1 : 0;
         return `<div class="card full booking"><h2>${IC.cal} Your booking</h2>${head}
           <div class="chips" style="margin-top:10px">${steps.map((s, i) => `<span class="badge ${i <= at ? 'pass' : 'pend'}">${i <= at ? '✓ ' : ''}${s}</span>`).join('')}</div>
-          <p class="hint" style="margin:8px 0 0">${b.status === 'Form received' ? 'Thank you for your booking form. Reservations will send your invoice; your place is provisional until the deposit is paid.'
-            : b.status === 'Invoiced' ? 'Your invoice has been sent. Please pay the deposit using your invoice number as the reference.' : 'Deposit received, thank you. Reservations will confirm your place.'}</p></div>`;
+          <p class="hint" style="margin:8px 0 0">${b.status === 'Invoiced' ? 'Your invoice has been sent. Please pay the deposit using your invoice number as the reference, then upload your proof of payment here.'
+            : b.status === 'Confirmed' ? 'Thank you for confirming you will attend. Your place is confirmed once your deposit is received.'
+            : 'Thank you for your booking. Reservations will send your invoice; your place is provisional until the deposit is paid.'}</p>
+          ${b.status !== 'Form received' || b.popOn ? popBtn : ''}</div>`;
       }
       if (b.status === 'Declined' || b.status === 'Cancelled') return `<div class="card full booking no-b"><h2>${IC.alert} ${b.status === 'Cancelled' ? 'This booking was cancelled' : 'You declined this course'}</h2>${head}
         <p class="hint" style="margin:8px 0 0">Changed your mind? Contact AGA reservations and we’ll do our best to help.</p></div>`;
@@ -228,6 +232,13 @@
     }).join('');
   }
   function wireBookings(root) {
+    // "Upload proof of payment": go to My documents with the type preselected
+    root.querySelectorAll('[data-pop]').forEach(btn => btn.onclick = () => {
+      state.popBooking = btn.dataset.pop; state.tab = 'details'; render();
+      const sel = document.getElementById('doc-type'); if (sel) sel.value = 'Proof of payment';
+      const card = sel && sel.closest('.card'); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast('Choose your proof of payment file (PDF or photo).');
+    });
     root.querySelectorAll('[data-bk]').forEach(card => {
       const id = card.dataset.bk, dec = card.querySelector('.decline');
       const send = async (response, reason) => {
@@ -420,9 +431,16 @@
       m.innerHTML = '<p class="hint">Uploading ' + esc(file.name) + '…</p>';
       try {
         const data = /^image\//.test(file.type) ? await shrinkImage(file, 2000) : await readFile(file);
-        const r = await authed({ portal: 'uploadDoc', base64: data.base64, mimeType: data.mimeType, fileName: file.name, docType: document.getElementById('doc-type').value });
+        const docType = document.getElementById('doc-type').value, isPop = docType === 'Proof of payment';
+        const r = await authed({ portal: 'uploadDoc', base64: data.base64, mimeType: data.mimeType, fileName: file.name, docType,
+          bookingId: isPop ? (state.popBooking || '') : '' });
         if (!r.ok) { m.innerHTML = `<div class="err">${esc(r.error)}</div>`; return; }
-        toast('Saved to your AGA folder.');
+        if (isPop) {   // show it on the booking card straight away
+          const today = new Date().toISOString().slice(0, 10);
+          (state.me.bookings || []).forEach(b => { if (!state.popBooking || b.bookingId === state.popBooking) b.popOn = today; });
+          state.popBooking = '';
+        }
+        toast(isPop ? 'Proof of payment sent to AGA reservations. Thank you!' : 'Saved to your AGA folder.');
         const d = await authed({ portal: 'docs' }); state.docs = d.ok ? d.docs : state.docs; render();
       } catch (x) { m.innerHTML = '<div class="err">That file could not be read.</div>'; }
     };
