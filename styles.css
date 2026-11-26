@@ -217,3 +217,46 @@ button, input, select { font-family: inherit; }
 
 .study-for .opt { align-items: flex-start; flex: 1 1 240px; }
 .study-for small { color: var(--muted, #8b7e74); font-weight: 400; }
+
+/* Booking form: one dropdown row per part */
+#b-parts .part-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 260px) auto; gap: 10px; align-items: end; padding: 8px 0; border-top: 0; }
+#b-parts .part-row .fld { margin: 0; }
+#b-parts .part-code { width: 100%; }
+#b-parts .part-camp select { width: 100%; }
+#b-parts .part-del { padding: 6px 10px; }
+@media (max-width: 640px) { #b-parts .part-row { grid-template-columns: 1fr auto; } #b-parts .part-camp { grid-column: 1 / -1; } }
+.doc-link { font-weight: 600; }
+/* "Please wait" box while something is saving */
+.busy-overlay { position: fixed; inset: 0; background: rgba(30, 20, 15, .55); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.busy-box { background: #fff; border-radius: 14px; padding: 22px 24px; max-width: 380px; width: 100%; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,.25); }
+.busy-box p { margin: 8px 0 0; }
+.busy-spin { width: 34px; height: 34px; margin: 0 auto 12px; border: 3px solid #e6ddd2; border-top-color: #6e1e10; border-radius: 50%; animation: busy-rot .8s linear infinite; }
+@keyframes busy-rot { to { transform: rotate(360deg); } }
+
+/* Course materials: small icons, tidy rows (fixes the giant icons) */
+.mat-list li { font-size: 14px; }
+.mat-list svg { width: 18px; height: 18px; color: var(--brand); flex-shrink: 0; }
+.mat-list a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mat-list h3, .mat-list .mat-head { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 12px 0 4px; }
+
+/* One card per booking: parts + invoice */
+.bk-parts { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; color: var(--muted); }
+.bk-parts li { padding: 3px 0 3px 12px; border-left: 3px solid var(--line); margin: 2px 0; }
+.inv-box { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fbf8f4; font-size: 13px; }
+.inv-box > div { display: flex; flex-direction: column; gap: 2px; }
+.inv-box span { color: var(--muted); }
+
+/* Keep me logged in */
+.keep-in { display: flex !important; margin: 4px 0 12px !important; border: 0 !important; padding: 4px 0 !important; background: none !important; font-size: 13px !important; }
+.keep-in small { color: var(--muted); font-weight: 400; }
+
+/* ---- Pocket Guide look (shared AGA style): serif headings, 16px cards, soft shadow, 12px buttons ---- */
+:root { --serif: Georgia, "Times New Roman", serif; --radius: 16px; --radius-sm: 12px; --shadow: 0 1px 2px rgba(61,15,7,.06), 0 6px 18px rgba(61,15,7,.07); }
+.hero h1, .card h2, .stat b, .login-card h1, .busy-box h3, .bk-when b { font-family: var(--serif); letter-spacing: 0; }
+.hero h1 { font-weight: 700; }
+.card h2 { font-size: 18px; color: var(--brand); }
+.card { border-radius: var(--radius); border: 1px solid var(--line, #e2d9cf); box-shadow: var(--shadow); }
+.btn { border-radius: var(--radius-sm); font-weight: 600; }
+.btn-block { border-radius: var(--radius-sm); font-weight: 700; }
+.hero { border-radius: var(--radius); }
+.stat { border-radius: var(--radius-sm); }

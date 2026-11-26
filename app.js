@@ -12,6 +12,11 @@
     get(k) { try { return sessionStorage.getItem(k) || ''; } catch (e) { return ''; } },
     set(k, v) { try { v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch (e) { } }
   };
+  // survives closing the browser: only the 'keep me logged in' device key
+  const keep = {
+    get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+    set(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) { } }
+  };
   function toast(msg, bad) {
     const t = document.getElementById('toast');
     t.textContent = msg; t.className = 'toast show' + (bad ? ' bad' : '');
@@ -24,8 +29,16 @@
       return await res.json();
     } catch (e) { return { ok: false, error: 'Could not reach the Academy system. Check your internet connection and try again.' }; }
   }
+  // A remembered device gets a fresh session when the old one runs out
+  async function resume() {
+    const key = keep.get('myaga_device'); if (!key) return false;
+    const r = await api({ portal: 'resume', deviceToken: key });
+    if (r && r.ok) { state.token = r.token; store.set('myaga_token', r.token); return true; }
+    keep.set('myaga_device', null); return false;
+  }
   async function authed(payload) {
-    const r = await api(Object.assign({ token: state.token }, payload));
+    let r = await api(Object.assign({ token: state.token }, payload));
+    if (r && r.expired && await resume()) r = await api(Object.assign({ token: state.token }, payload));
     if (r && r.expired) { logout(true); }
     return r;
   }
@@ -68,6 +81,7 @@
             <input id="sid" name="username" autocapitalize="characters" autocomplete="username" placeholder="e.g. STU-1A2B3C4D" required></div>
           <div class="fld"><label for="pin">PIN <span>(6 numbers)</span></label>
             <input id="pin" name="password" class="pin-input" type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" autocomplete="current-password" required></div>
+          <label class="opt keep-in"><input type="checkbox" id="remember" checked><span>Keep me logged in on this device <small>(untick on a shared computer)</small></span></label>
           <button class="btn btn-primary btn-block" id="login-btn">Log in</button>
           <p class="hint" style="margin-top:14px">Your Student ID and first PIN are emailed to you when you book. Forgotten your PIN? Ask reservations or your trainer to reset it.</p>
           <a class="btn btn-block" href="#/book" style="margin-top:4px">New student? Book a course</a>
@@ -79,9 +93,11 @@
       e.preventDefault();
       const btn = document.getElementById('login-btn'); btn.disabled = true; btn.textContent = 'Checking…';
       const sid = f.sid.value.trim().toUpperCase();
-      const r = await api({ portal: 'login', studentId: sid, pin: f.pin.value.trim() });
+      const remember = document.getElementById('remember').checked;
+      const r = await api({ portal: 'login', studentId: sid, pin: f.pin.value.trim(), remember });
       if (!r.ok) return viewLogin(r.error);
       state.token = r.token; store.set('myaga_token', r.token); store.set('myaga_sid', sid);
+      keep.set('myaga_device', remember && r.deviceToken ? r.deviceToken : null);
       if (r.mustChangePin) return viewChangePin(true);
       load();
     });
@@ -120,7 +136,8 @@
   }
 
   function logout(expired) {
-    if (state.token && !expired) api({ portal: 'logout', token: state.token });
+    if (state.token && !expired) api({ portal: 'logout', token: state.token, deviceToken: keep.get('myaga_device') || '' });
+    if (!expired) keep.set('myaga_device', null);   // logging out forgets this device
     state.token = ''; state.me = null; state.docs = null; store.set('myaga_token', '');
     viewLogin(expired ? 'Your session has ended. Please log in again.' : '');
   }
@@ -202,17 +219,37 @@
   }
 
   // Upcoming bookings: the student confirms or declines their place
+  // One card per booking: all its 2-week parts together, with the invoice
+  function myBookings() {
+    const by = {}, out = [];
+    (state.me.bookings || []).forEach(b => { const k = b.groupRef || b.bookingId; if (!by[k]) { by[k] = { parts: [] }; out.push(by[k]); } by[k].parts.push(b); });
+    return out.map(g => {
+      g.parts.sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
+      const f = g.parts[0], last = g.parts[g.parts.length - 1], inv = g.parts.find(p => p.invoiceNo) || {};
+      return Object.assign({}, f, { parts: g.parts, endDate: last.endDate || f.endDate, popOn: g.parts.map(p => p.popOn).filter(Boolean)[0] || '',
+        invoiceNo: inv.invoiceNo || '', invoiceUrl: inv.invoiceUrl || '', invoiceTotal: inv.invoiceTotal || 0, amountPaid: inv.amountPaid || 0, invoiceCurrency: inv.invoiceCurrency || '' });
+    });
+  }
+  const money = (cur, v) => ({ EUR: 'EUR', USD: 'USD', BWP: 'P' }[cur] || cur || '') + ' ' + (Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function invoiceBox(b) {
+    if (!b.invoiceNo) return '';
+    const due = Math.max(0, (b.invoiceTotal || 0) - (b.amountPaid || 0));
+    return `<div class="inv-box"><div><b>Invoice ${esc(b.invoiceNo)}</b>${b.invoiceTotal ? `<span>Total ${esc(money(b.invoiceCurrency, b.invoiceTotal))} · Paid ${esc(money(b.invoiceCurrency, b.amountPaid))} · ${due > 0.004 ? '<b>Due ' + esc(money(b.invoiceCurrency, due)) + '</b>' : '<b>Paid in full</b>'}</span>` : ''}</div>
+      ${b.invoiceUrl ? `<a class="btn" href="${esc(b.invoiceUrl)}" target="_blank" rel="noopener">View invoice</a>` : ''}</div>`;
+  }
   function bookingCards() {
     const today = new Date().toISOString().slice(0, 10);
-    const list = (state.me.bookings || []).filter(b => b.status === 'Invited' || !b.endDate || b.endDate >= today);
+    const list = myBookings().filter(b => b.status === 'Invited' || !b.endDate || b.endDate >= today);
     if (!list.length) return '';
     return list.map(b => {
       const when = b.startDate ? fmtDate(b.startDate) + (b.endDate ? ' – ' + fmtDate(b.endDate) : '') : 'Dates to be confirmed';
-      const head = `<div class="bk-when"><b>${esc(b.courseType)} · ${esc(b.courseCode)}</b><span>${esc(when)}${b.venue ? ' · ' + esc(b.venue) : ''}</span></div>`;
+      const head = `<div class="bk-when"><b>${esc(b.courseType)} · ${esc(b.parts.map(p => p.courseCode).join(' + '))}</b><span>${esc(when)}${b.parts.length > 1 ? ' · ' + b.parts.length + ' parts' : b.venue ? ' · ' + esc(b.venue) : ''}</span></div>` +
+        (b.parts.length > 1 ? `<ul class="bk-parts">${b.parts.map(p => `<li>${esc(p.courseCode)} · ${esc(fmtDate(p.startDate))}${p.endDate ? ' – ' + esc(fmtDate(p.endDate)) : ''}${p.camp ? ' · ' + esc(p.camp) : ''}</li>`).join('')}</ul>` : '') + invoiceBox(b);
       // The place is confirmed once the deposit is received
       const popBtn = `<div class="form-actions"><button class="btn btn-primary" data-pop="${esc(b.bookingId)}">Upload proof of payment</button>${b.popOn ? `<span class="hint">✓ Proof of payment received ${esc(fmtDate(b.popOn))}</span>` : ''}</div>`;
       if (b.status === 'Deposit paid' || b.status === 'Paid in full') return `<div class="card full booking ok-b"><h2>${IC.check} Your place is confirmed</h2>${head}
-        <p class="hint" style="margin:8px 0 0">${b.status === 'Paid in full' ? 'Paid in full, thank you.' : 'Deposit received, thank you.'} Before the course, please make sure your details, photo and passport copy are up to date.</p></div>`;
+        <p class="hint" style="margin:8px 0 0">${b.status === 'Paid in full' ? 'Paid in full, thank you.' : 'Deposit received, thank you.'} Before the course, please make sure your details, photo and passport copy are up to date.</p>
+        ${b.status === 'Deposit paid' ? `<div class="form-actions"><button class="btn" data-pop="${esc(b.bookingId)}">Upload proof of payment for the balance</button></div>` : ''}</div>`;
       if (b.status === 'Confirmed' || b.status === 'Form received' || b.status === 'Invoiced') {
         const steps = ['Form received', 'Invoiced', 'Deposit paid', 'Place confirmed'], at = b.status === 'Invoiced' ? 1 : 0;
         return `<div class="card full booking"><h2>${IC.cal} Your booking</h2>${head}
@@ -276,6 +313,13 @@
     return `<div class="card full"><h2>${IC.file} Course materials</h2><p class="hint" style="margin:0">Your manual, workbooks and apps for your course.</p>${html}</ul></div>`;
   }
 
+  // Apps and course links open once a deposit is received. Students with past courses and
+  // no booking on the new system (our earlier students) keep their access.
+  function unlocked() {
+    const bks = state.me.bookings || [];
+    if (bks.some(b => b.status === 'Deposit paid' || b.status === 'Paid in full')) return true;
+    return !bks.length && (state.me.student.coursesData || []).length > 0;
+  }
   function tabOverview(s, recs, courses, notes) {
     const latestNote = notes[0];
     return `<div class="grid">${bookingCards()}${materialsCard()}
@@ -288,12 +332,13 @@
           : '<p class="hint">No courses recorded yet.</p>'}</div>
       <div class="card"><h2>${IC.chat} Latest from your trainer</h2>
         ${latestNote ? noteHtml(latestNote) + (notes.length > 1 ? `<div class="form-actions"><button class="btn" data-go="notes">See all ${notes.length} notes</button></div>` : '') : '<p class="hint">No trainer notes yet.</p>'}</div>
-      <div class="card full"><h2>${IC.book} Study tools</h2>
+      ${unlocked() ? `<div class="card full"><h2>${IC.book} Study tools</h2>
         <p class="hint">Quizzes, the manual and exam practice, all in the AGA Pocket Guide.</p>
         <div class="form-actions" style="margin-top:0">
           <a class="btn btn-primary" href="${esc(CFG.POCKET_GUIDE)}" target="_blank" rel="noopener">Open Pocket Guide</a>
           <a class="btn" href="${esc(CFG.POCKET_GUIDE)}#/exam" target="_blank" rel="noopener">Exam practice</a>
-          <a class="btn" href="${esc(CFG.POCKET_GUIDE)}#/weak" target="_blank" rel="noopener">My weak spots</a></div></div>
+          <a class="btn" href="${esc(CFG.POCKET_GUIDE)}#/weak" target="_blank" rel="noopener">My weak spots</a></div></div>`
+        : `<div class="card full"><h2>${IC.book} Study tools 🔒</h2><p class="hint" style="margin:0">The Pocket Guide, quizzes and exam practice open here once your deposit has been received.</p></div>`}
     </div>`;
   }
 
@@ -490,7 +535,8 @@
   function route() {
     if (/^#\/book/.test(location.hash)) return window.MyAgaBook.render($app);
     state.token = store.get('myaga_token');
-    state.token ? load() : viewLogin();
+    if (state.token) return load();
+    resume().then(ok => ok ? load() : viewLogin());
   }
   window.addEventListener('hashchange', route);
   route();

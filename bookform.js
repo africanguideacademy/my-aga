@@ -51,15 +51,16 @@
       <form id="bf" class="bf" novalidate>
         <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
         ${section('1. Your course', `
-          ${radios('courseType', 'Which course?', ['Nature Guide', 'Trails Guide', 'Wilderness Trails', 'Track & Sign', 'Other'], { req: true, wide: true })}
           <div id="b-parts" class="wide"><p class="hint" style="margin:0">Loading course dates…</p></div>
+          <div class="wide"><button type="button" class="btn" id="b-add-part" hidden>+ Add the next part</button></div>
           <label class="opt wide" id="b-nl-wrap"><input type="checkbox" id="b-nl"><span>My course or dates are not listed</span></label>
           <div id="b-notlisted" class="wide form" hidden>
+            ${radios('courseType', 'Type of course', ['Nature Guide', 'Trails Guide', 'Wilderness Trails', 'Track & Sign', 'Other'], { wide: true })}
             ${txt('courseOther', 'Other course', { hint: '(if "Other")' })}
             ${txt('courseLevel', 'Course level', { hint: '(if known)' })}
             ${txt('startDate', 'Preferred start', { type: 'date' })}${txt('endDate', 'Preferred finish', { type: 'date' })}
           </div>
-        `, 'Our courses run in <b>2-week parts</b>: <b>Part A</b> is the first two weeks and <b>Part B</b> the second two weeks. A full Nature Guide or Trails Guide course is Part A + Part B. Tick every part you want: one part, both parts, or two courses in a row. For each part choose where you would like to study (Kwapa in the Okavango Delta, or our Kalahari Training Camp where it is offered).<br><b>Fees per 2-week part:</b> International EUR 3,850 · SADC (citizens and permanent residents of African countries) P 17,500. Single tent supplement: 20% (International) or 30% (SADC).')}
+        `, 'Our courses run in <b>2-week parts</b>: <b>Part A</b> is the first two weeks and <b>Part B</b> the second two weeks. A full Nature Guide or Trails Guide course is Part A + Part B. Choose your first part, then use <b>+ Add the next part</b> for each further part you want: one part, both parts, or two courses in a row. For each part choose where you would like to study (Kwapa in the Okavango Delta, or our Kalahari Training Camp where it is offered).<br><b>Fees per 2-week part:</b> International EUR 3,850 · SADC (citizens and permanent residents of African countries) P 17,500. Single tent supplement: 20% (International) or 30% (SADC).')}
         ${section('2. How did you book?', `
           ${radios('bookedVia', 'Booked', ['Direct with AGA', 'Through an agent', 'Through a safari company', 'Other'], { req: true, wide: true })}
           ${txt('bookedViaName', 'Agent / company name', { hint: '(if not direct)', wide: true })}
@@ -100,7 +101,7 @@
           ${txt('dietary', 'Dietary requirements', { ph: 'e.g. vegetarian, vegan, none' })}${txt('foodAllergies', 'Food allergies', { ph: 'None' })}
           <p class="hint wide" style="margin:0">Students may not change to vegetarian/vegan once on course: tell us now so we can cater. Drinks are for your own account (buy them in Maun on arrival).</p>
           ${radios('helicopter', 'Optional helicopter transfer into/out of camp (3 passengers)', ['Interested, even if solo', 'Interested if at least 1 other passenger', 'Interested only if 2 other passengers', 'Not interested'], { wide: true })}
-          ${yn('insurance', 'Insurance against AGA training equipment (US$20/week)?', { wide: true })}
+          ${yn('insurance', 'Insurance against AGA training equipment (EUR 20 per week)?', { wide: true })}
         `)}
         ${section('7. Qualifications and memberships', `
           ${txt('bqaQualifications', 'Existing BQA qualifications', { hint: '(level, if any)' })}${yn('bqaMember', 'Are you a BQA member?')}
@@ -111,7 +112,8 @@
         `)}
         ${section('8. Declaration', `
           <p class="wide" style="margin:0">By submitting this Booking Form a booking is made, and you are bound by our Terms and Conditions, Waiver, Indemnity and Learnership Agreement. Please read each document and tick to agree:</p>
-          <div class="wide agree">${DOCS.map(([name, url], i) => `<label class="opt"><input type="checkbox" name="agree${i}"><span>${i + 1}. I have read and agree to the ${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(name)}</a>` : esc(name)}</span></label>`).join('')}</div>
+          <div class="wide agree">${DOCS.map(([name, url], i) => `<label class="opt"><input type="checkbox" name="agree${i}"><span>${i + 1}. I have read and agree to the <a class="doc-link" data-doc="${i}" href="${esc(url || '#')}" target="_blank" rel="noopener"${url ? '' : ' hidden'}>${esc(name)} ↗</a><span class="doc-plain" data-doc="${i}"${url ? ' hidden' : ''}>${esc(name)}</span></span></label>`).join('')}</div>
+          <p class="hint wide" style="margin:0">Click a document's name to read it in a new window.</p>
           ${txt('signName', 'Your full name', { req: true, wide: true, hint: '(as your signature)' })}
           <div class="fld wide"><label>Sign here with your finger or mouse *</label><canvas id="sig" class="sig"></canvas>
             <button type="button" class="btn" id="sig-clear" style="margin-top:6px">Clear signature</button></div>
@@ -144,40 +146,60 @@
     };
     // ---- course parts: 2-week parts with places left and a camp choice per part ----
     const partsBox = document.getElementById('b-parts'), nl = document.getElementById('b-nl');
-    const typeNow = () => (f.querySelector('input[name="courseType"]:checked') || {}).value || '';
-    const places = n => n == null ? 'places available' : n > 0 ? n + (n === 1 ? ' place' : ' places') + ' left' : 'full';
-    const renderParts = () => {
-      const type = typeNow(), keep = {};
-      partsBox.querySelectorAll('.part-row').forEach(r => { const cb = r.querySelector('input'); if (cb.checked) keep[cb.dataset.part] = (r.querySelector('select') || {}).value || true; });
-      const list = courses.filter(p => p.type === type);
-      if (!type) partsBox.innerHTML = '<p class="hint" style="margin:0">Choose your course to see the dates.</p>';
-      else if (!list.length) partsBox.innerHTML = `<p class="hint" style="margin:0">${type === 'Other' ? 'Tell us about the course you want below.' : 'No upcoming dates are listed for this course yet. Tick “not listed” and tell us your preferred dates.'}</p>`;
-      else {
-        const groups = [];
-        list.forEach(p => { const k = p.code.replace(/-[AB]$/, ''); let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, items: [] }); g.items.push(p); });
-        partsBox.innerHTML = groups.map(g => `<div class="part-group"><div class="part-head">${esc(g.items[0].type)} starting ${esc(fmt(g.items[0].startDate))}</div>` +
-          g.items.map(p => {
-            const kwp = p.kwpLeft == null || p.kwpLeft > 0, klh = p.klhLeft == null ? (p.startDate >= kalahariFrom && /nature|trails guide/i.test(p.type)) : p.klhLeft > 0;
-            const camps = [kwp ? ['Kwapa', 'Kwapa (Okavango Delta)' + (p.kwpLeft != null ? ' · ' + places(p.kwpLeft) : '')] : null,
-              klh ? ['Kalahari', 'Kalahari Training Camp' + (p.klhLeft != null ? ' · ' + places(p.klhLeft) : '')] : null].filter(Boolean);
-            const full = !camps.length;
-            const campUi = full ? '<span class="part-full">Full</span>' : camps.length === 1 ? `<span class="part-one" data-camp="${camps[0][0]}">${esc(camps[0][1])}</span>`
-              : `<select aria-label="Where would you like to study?">${camps.map(c => `<option value="${c[0]}">${esc(c[1])}</option>`).join('')}</select>`;
-            return `<div class="part-row${full ? ' is-full' : ''}"><label class="opt"><input type="checkbox" data-part="${esc(p.code)}"${full ? ' disabled' : ''}>
-              <span><b>${p.part ? 'Part ' + esc(p.part) : esc(p.code)}</b> · ${esc(fmt(p.startDate))}${p.endDate ? ' – ' + esc(fmt(p.endDate)) : ''} <small>${esc(p.code)}</small></span></label>
-              <div class="part-camp">${campUi}</div></div>`;
-          }).join('') + '</div>').join('');
-        partsBox.querySelectorAll('.part-row').forEach(r => { const cb = r.querySelector('input'), v = keep[cb.dataset.part];
-          if (v && !cb.disabled) { cb.checked = true; const s = r.querySelector('select'); if (s && v !== true) s.value = v; } });
-      }
-      document.getElementById('b-notlisted').hidden = !(nl.checked || type === 'Other');
+    const addBtn = document.getElementById('b-add-part');
+    const places = n => n == null ? '' : n > 0 ? ' · ' + n + (n === 1 ? ' place' : ' places') + ' left' : ' · full';
+    const camps = p => {
+      const kwp = p.kwpLeft == null || p.kwpLeft > 0, klh = p.klhLeft == null ? (p.startDate >= kalahariFrom && /nature|trails guide/i.test(p.type)) : p.klhLeft > 0;
+      return [kwp ? ['Kwapa', 'Kwapa (Okavango Delta)' + places(p.kwpLeft)] : null, klh ? ['Kalahari', 'Kalahari Training Camp' + places(p.klhLeft)] : null].filter(Boolean);
     };
-    const chosenParts = () => Array.from(partsBox.querySelectorAll('.part-row')).filter(r => r.querySelector('input').checked).map(r => {
-      const s = r.querySelector('select'), one = r.querySelector('.part-one');
-      return { code: r.querySelector('input').dataset.part, camp: s ? s.value : (one ? one.dataset.camp : 'Kwapa') };
+    const partLabel = p => `${p.code} · ${fmt(p.startDate)}${p.endDate ? ' – ' + fmt(p.endDate) : ''} · ${p.type}${p.part ? ' Part ' + p.part : ''}`;
+    // The dropdown lists the courses exactly as they are named on the Super Schedule,
+    // soonest first, under month headings
+    const monthOf = d => { const t = new Date(d + 'T00:00:00'); return isNaN(t) ? 'Dates to be confirmed' : t.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }); };
+    const options = sel => {
+      const sorted = courses.slice().sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)) || a.code.localeCompare(b.code));
+      const months = [...new Set(sorted.map(p => monthOf(p.startDate)))];
+      return '<option value="">Choose a course and part…</option>' + months.map(m => `<optgroup label="${esc(m)}">` + sorted.filter(p => monthOf(p.startDate) === m).map(p => {
+        const full = !camps(p).length;
+        return `<option value="${esc(p.code)}"${p.code === sel ? ' selected' : ''}${full ? ' disabled' : ''}>${esc(partLabel(p))}${full ? ' (full)' : ''}</option>`;
+      }).join('') + '</optgroup>').join('');
+    };
+    const setCamp = row => {
+      const p = courses.find(c => c.code === row.querySelector('.part-code').value), box = row.querySelector('.part-camp');
+      if (!p) { box.innerHTML = ''; return; }
+      const cs = camps(p), was = (box.querySelector('select') || {}).value;
+      box.innerHTML = cs.length === 1 ? `<span class="part-one" data-camp="${cs[0][0]}">${esc(cs[0][1])}</span>`
+        : `<select aria-label="Where would you like to study?">${cs.map(c => `<option value="${c[0]}"${c[0] === was ? ' selected' : ''}>${esc(c[1])}</option>`).join('')}</select>`;
+    };
+    const addRow = code => {
+      const n = partsBox.querySelectorAll('.part-row').length + 1, row = document.createElement('div');
+      row.className = 'part-row';
+      row.innerHTML = `<div class="fld"><label>${n === 1 ? 'Course and part' : 'Next part'}</label><select class="part-code">${options(code)}</select></div>
+        <div class="part-camp"></div>${n > 1 ? '<button type="button" class="btn part-del" title="Remove this part">✕</button>' : ''}`;
+      row.querySelector('.part-code').addEventListener('change', () => { setCamp(row); syncAdd(); });
+      const del = row.querySelector('.part-del'); if (del) del.onclick = () => { row.remove(); syncAdd(); };
+      partsBox.appendChild(row); setCamp(row); syncAdd();
+    };
+    // The part that follows: same course type, starting the day this one ends (else the next one by date)
+    const nextPart = code => {
+      const p = courses.find(c => c.code === code); if (!p) return '';
+      const taken = chosenParts().map(x => x.code), same = courses.filter(c => c.type === p.type && taken.indexOf(c.code) < 0 && c.startDate >= (p.endDate || p.startDate));
+      const n = same.find(c => c.startDate === p.endDate) || same[0];
+      return n ? n.code : '';
+    };
+    const syncAdd = () => { const last = chosenParts().slice(-1)[0]; addBtn.hidden = !last; };
+    addBtn.onclick = () => { const last = chosenParts().slice(-1)[0]; addRow(last ? nextPart(last.code) : ''); };
+    const renderParts = pre => {
+      partsBox.innerHTML = courses.length ? '' : '<p class="hint" style="margin:0">No upcoming dates are listed yet. Tick “not listed” and tell us your preferred dates.</p>';
+      if (courses.length) addRow(pre || '');
+      document.getElementById('b-notlisted').hidden = !nl.checked;
+    };
+    const chosenParts = () => Array.from(partsBox.querySelectorAll('.part-row')).filter(r => r.querySelector('.part-code').value).map(r => {
+      const s = r.querySelector('.part-camp select'), one = r.querySelector('.part-one');
+      return { code: r.querySelector('.part-code').value, camp: s ? s.value : (one ? one.dataset.camp : 'Kwapa') };
     });
     const updateStudy = () => { document.getElementById('b-quals').hidden = (f.querySelector('input[name="studyFor"]:checked') || {}).value !== 'qualification'; };
-    f.addEventListener('change', e => { if (e.target.name === 'studyFor') updateStudy(); if (e.target.name === 'courseType' || e.target === nl) renderParts(); const o = collect(); delete o.signName; store.set(DRAFT_KEY, o); });
+    f.addEventListener('change', e => { if (e.target.name === 'studyFor') updateStudy(); if (e.target === nl) document.getElementById('b-notlisted').hidden = !nl.checked; const o = collect(); delete o.signName; store.set(DRAFT_KEY, o); });
     f.addEventListener('input', () => { const o = collect(); store.set(DRAFT_KEY, o); });
 
     api({ portal: 'courses' }).then(r => {
@@ -185,11 +207,15 @@
       // New: parts with places left. Older backend: plain course list (places unknown)
       courses = (r && r.ok && (r.parts || (r.courses || []).map(c => ({ code: c.code, type: c.type, part: (c.code.match(/-([AB])$/) || [])[1] || '',
         startDate: c.startDate, endDate: c.endDate, kwpLeft: null, klhLeft: null })))) || [];
+      // Document links come from the Academy's Student Documents list
+      ((r && r.docLinks) || []).forEach((u, i) => {
+        if (!u) return;
+        const a = f.querySelector(`.doc-link[data-doc="${i}"]`), s = f.querySelector(`.doc-plain[data-doc="${i}"]`);
+        if (a) { a.href = u; a.hidden = false; } if (s) s.hidden = true;
+      });
       restore(); updateStudy();
       const p = pre && courses.find(c => c.code === pre);
-      if (p) { const rb = f.querySelector(`input[name="courseType"][value="${p.type}"]`); if (rb) rb.checked = true; }
-      renderParts();
-      if (p) { const cb = partsBox.querySelector(`input[data-part="${CSS.escape(p.code)}"]`); if (cb && !cb.disabled) cb.checked = true; }
+      renderParts(p ? p.code : '');
     });
 
     // signature pad
@@ -207,10 +233,11 @@
       e.preventDefault();
       const o = collect(), msg = document.getElementById('bf-msg');
       const showErr = t => { msg.innerHTML = `<div class="err">${esc(t)}</div>`; msg.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
-      const sel = chosenParts(), notListed = nl.checked || o.courseType === 'Other';
-      if (!o.courseType) return showErr('Please choose your course.');
-      if (!sel.length && !notListed) return showErr('Please tick the part(s) you want to book, or “My course or dates are not listed”.');
+      const sel = chosenParts(), notListed = nl.checked;
+      if (!sel.length && !notListed) return showErr('Please choose your course and part, or tick “My course or dates are not listed”.');
+      if (!sel.length && !o.courseType) return showErr('Please choose the type of course you are interested in.');
       const selP = sel.map(s => courses.find(c => c.code === s.code)).filter(Boolean).sort((a, b) => a.startDate.localeCompare(b.startDate));
+      if (selP.length) o.courseType = selP[0].type;
       const missing = [];
       [['surname', 'surname'], ['firstNames', 'first names'], ['gender', 'gender'], ['nationality', 'nationality'], ['omangPassport', 'passport/Omang number'],
         ['dateOfBirth', 'date of birth'], ['cellNumber', 'cell number'], ['email', 'email'], ['bookedVia', 'how you booked'], ['paymentMethod', 'payment method'],
@@ -237,7 +264,14 @@
         agree: DOCS.map((d, i) => !!o['agree' + i]), signature: trimSig(cv)
       });
       const btn = document.getElementById('bf-send'); btn.disabled = true; btn.textContent = 'Sending your booking…';
+      // Keep the student on the page while it saves (it can take up to a minute)
+      const steps = ['Checking your booking…', 'Saving your details…', 'Reserving your place…', 'Preparing your booking form PDF…', 'Sending your confirmation email…'];
+      const ov = document.createElement('div'); ov.className = 'busy-overlay';
+      ov.innerHTML = '<div class="busy-box"><div class="busy-spin"></div><b>Sending your booking</b><p id="busy-step">' + steps[0] + '</p><p class="hint">This can take up to a minute. Please don’t close or refresh this page.</p></div>';
+      document.body.appendChild(ov);
+      let si = 0; const timer = setInterval(() => { si = Math.min(si + 1, steps.length - 1); const s = document.getElementById('busy-step'); if (s) s.textContent = steps[si]; }, 6000);
       const r = await api({ portal: 'bookingForm', form, website: f.elements.website.value });
+      clearInterval(timer); ov.remove();
       btn.disabled = false; btn.textContent = 'Submit my booking';
       if (!r || !r.ok) return showErr((r && r.error) || 'Something went wrong. Please try again.');
       store.set(DRAFT_KEY, null);
