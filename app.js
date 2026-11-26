@@ -259,6 +259,8 @@
             : 'Thank you for your booking. Reservations will send your invoice; your place is provisional until the deposit is paid.'}</p>
           ${b.status !== 'Form received' || b.popOn ? popBtn : ''}</div>`;
       }
+      if (b.status === 'Released') return `<div class="card full booking no-b"><h2>${IC.alert} This provisional booking was released</h2>${head}
+        <p class="hint" style="margin:8px 0 0">We didn’t receive your deposit, so the place was freed for another student. Still want to come? Email <a href="mailto:reservations@guidetrainingcourses.com">reservations@guidetrainingcourses.com</a> and we’ll re-book you: your details are kept.</p></div>`;
       if (b.status === 'Declined' || b.status === 'Cancelled') return `<div class="card full booking no-b"><h2>${IC.alert} ${b.status === 'Cancelled' ? 'This booking was cancelled' : 'You declined this course'}</h2>${head}
         <p class="hint" style="margin:8px 0 0">Changed your mind? Contact AGA reservations and we’ll do our best to help.</p></div>`;
       return `<div class="card full booking" data-bk="${esc(b.bookingId)}"><h2>${IC.cal} Please confirm your place</h2>${head}
