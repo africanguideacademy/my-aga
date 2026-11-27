@@ -101,14 +101,33 @@
     const all = (s.coursesData || []).slice().sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')));
     return all[0] || null;
   }
+  // Attributes: each section passes at an average of 7.5/10; overall pass is 75%
+  const ATTR_PASS = 7.5;
+  const ATTR_LABEL = { attributes: 'General attributes', comm: 'Communication', guiding: 'Guiding skills' };
+  function attrSection(s, g) {
+    const course = latestWith(s, g), rows = attrScores(s, course, g), got = rows.filter(r => r.score != null);
+    const avg = got.length ? Math.round(got.reduce((a, r) => a + r.score, 0) / got.length * 10) / 10 : null;
+    return { key: g, label: ATTR_LABEL[g], course, rows, avg, pass: avg != null && avg >= ATTR_PASS };
+  }
+  function attrOverall(s) {
+    const all = ['attributes', 'comm', 'guiding'].map(g => attrSection(s, g)).reduce((a, x) => a.concat(x.rows.filter(r => r.score != null)), []);
+    return all.length ? Math.round(all.reduce((a, r) => a + r.score, 0) / all.length * 100) / 10 : null;   // as a %
+  }
   function parseComments(v) { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
   function allComments(s) {
     const groups = [['ngComments', 'Nature Guide'], ['arhComments', 'Rifle handling (ARH)'], ['encComments', 'Encounters & walking'],
       ['attrGenericComments', 'General attributes'], ['attrCommComments', 'Communication'], ['attrGuidingComments', 'Guiding skills'],
       ['generalComments', 'General']];
-    const out = [];
-    groups.forEach(([k, area]) => parseComments(s[k]).forEach(c => { if (c && String(c.text || '').trim()) out.push(Object.assign({ area }, c)); }));
-    if (String(s.comments || '').trim()) out.push({ area: 'General', text: s.comments, trainer: '', course: '', date: '' });
+    const out = [], seen = {};
+    const norm = t => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    groups.forEach(([k, key]) => parseComments(s[k]).forEach(c => {
+      const t = norm(c && c.text);
+      if (!t || seen[t]) return;                       // the same note saved twice shows once
+      seen[t] = 1; out.push(Object.assign({ area: key, key: k }, c));
+    }));
+    // "Comments" is the Profile System's combined copy of the notes above (for its PDF).
+    // Show it only for older profiles that have no separate notes.
+    if (!out.length && String(s.comments || '').trim()) out.push({ area: 'General', key: 'generalComments', text: s.comments, trainer: '', course: '', date: '' });
     return out.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   }
 
@@ -173,12 +192,18 @@
     }
 
     // 4. Attributes and guiding skills (scored 1-10 by trainers)
-    ['attributes', 'comm', 'guiding'].forEach(g => attrScores(s, undefined, g).forEach(a => {
-      if (a.score != null && a.score <= 5) add(a.score <= 3 ? 'high' : 'medium',
-        g === 'guiding' ? 'Guiding skills' : g === 'comm' ? 'Communication' : 'Attributes',
-        'Work on: ' + a.label + ' (' + a.score + '/10)', TIPS[a.key] || '',
-        a.key === 'birdId' ? [{ label: 'Bird quizzes', href: pgLink('birds') }] : a.key === 'treeId' ? [{ label: 'Plant quizzes', href: pgLink('plants') }] : []);
-    }));
+    //    Pass: 7.5/10 average per section. One to-do per section below that, with tips for its weakest items.
+    ['attributes', 'comm', 'guiding'].forEach(g => {
+      const sec = attrSection(s, g);
+      if (sec.avg == null || sec.avg >= ATTR_PASS) return;
+      const weak = sec.rows.filter(a => a.score != null && a.score < ATTR_PASS).sort((a, b) => a.score - b.score).slice(0, 3);
+      const acts = [];
+      if (weak.some(a => a.key === 'birdId')) acts.push({ label: 'Bird quizzes', href: pgLink('birds') });
+      if (weak.some(a => a.key === 'treeId')) acts.push({ label: 'Plant quizzes', href: pgLink('plants') });
+      acts.push({ label: 'See my scores', tab: 'progress' });
+      add(sec.avg < 5 ? 'high' : 'medium', sec.label, sec.label + ': ' + sec.avg + '/10 (pass mark ' + ATTR_PASS + ')',
+        'Focus on ' + weak.map(a => a.label.toLowerCase() + ' (' + a.score + ')').join(', ') + '. ' + weak.map(a => TIPS[a.key]).filter(Boolean).join(' '), acts);
+    });
 
     // 5. Benchmarking exam
     const bm = (s.benchmarkingData || []).slice().sort((a, b) => String(b.year || '').localeCompare(String(a.year || '')))[0];
@@ -194,6 +219,6 @@
     return recs.sort((a, b) => order[a.priority] - order[b.priority]);
   }
 
-  window.MyAgaRecs = { build, ngScores, trailsScores, attrScores, latestWith, coursesOfType, latestCourse, allComments, num, pct, daysUntil,
+  window.MyAgaRecs = { build, ngScores, trailsScores, attrScores, attrSection, attrOverall, ATTR_PASS, TIPS, latestWith, coursesOfType, latestCourse, allComments, num, pct, daysUntil,
     NG_MODULES, TRAILS_MODULES, ARH, ATTR };
 })();

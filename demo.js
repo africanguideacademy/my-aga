@@ -27,7 +27,11 @@
     ngComments: JSON.stringify([{ trainer: 'Grant', course: 'NG-2026-03', date: '2026-04-20', text: 'Strong on mammals and plants. Amphibians and astronomy need more time - use the Pocket Guide every evening.' }]),
     arhComments: JSON.stringify([{ trainer: 'Grant', course: 'TG-2026-08', date: '2026-08-27', text: 'Calm under pressure on the charge. Malfunction drill too slow - practise clearing the stoppage without looking down.' }]),
     attrCommComments: JSON.stringify([{ trainer: 'Grant', course: 'NG-2026-03', date: '2026-04-22', text: 'Great enthusiasm with guests. Speak up on the vehicle - guests in the back row struggled to hear.' }]),
-    generalComments: '[]', encComments: '[]', attrGenericComments: '[]', attrGuidingComments: '[]', comments: '',
+    // generalComments repeats the NG note, and "comments" is the Profile System's combined copy: both must not show twice
+    generalComments: JSON.stringify([{ trainer: 'Grant', course: 'NG-2026-03', date: '2026-04-20', text: 'Strong on mammals and plants. Amphibians and astronomy need more time - use the Pocket Guide every evening.' },
+      { trainer: 'Grant', course: 'NG-2026-03', date: '2026-04-24', text: 'Well done on completing the course. Keep up your bird calls before the FGASA exam.' }]),
+    encComments: '[]', attrGenericComments: '[]', attrGuidingComments: JSON.stringify([{ trainer: 'Grant', course: 'NG-2026-03', date: '2026-04-23', text: 'Good positioning at sightings. Work on tracking: slow down and read the ground.' }]),
+    comments: '[Grant | 2026-04-20] Strong on mammals and plants. Amphibians and astronomy need more time - use the Pocket Guide every evening.\n\n[Grant | 2026-08-27] Calm under pressure on the charge.',
     photoUrl: '', photoThumb: '', fileUrl: '', profileFolderUrl: '', lastUpdated: '2026-08-28'
   };
   const inv = { invoiceNo: 'AGA-INV-0142', invoiceUrl: 'https://example.com/invoice.pdf', invoiceTotal: 7860, amountPaid: 1572, invoiceCurrency: 'EUR' };

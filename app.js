@@ -171,7 +171,8 @@
 
     const avatar = s.photoThumb ? `<img class="avatar" src="${esc(s.photoThumb)}" alt="">` : `<div class="avatar">${esc(initials(s))}</div>`;
     const quals = String(s.qualification || '').split(',').map(q => q.trim()).filter(Boolean);
-    const tabs = [['overview', 'To do', IC.list, todoCount], ['progress', 'My progress', IC.chart], ['notes', 'Trainer notes', IC.chat, notes.length], ['details', 'My details', IC.user]];
+    if (state.tab === 'notes') state.tab = 'progress';   // trainer notes now live inside My progress
+    const tabs = [['overview', 'To do', IC.list, todoCount], ['progress', 'My progress', IC.chart], ['details', 'My details', IC.user]];
 
     $app.innerHTML = `
       ${DEMO ? '<div class="demo-banner">Demo mode: this is a made-up student, and nothing is saved.</div>' : ''}
@@ -193,8 +194,7 @@
     $app.querySelectorAll('.tab').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
     const body = document.getElementById('tab-body');
     if (state.tab === 'overview') { body.innerHTML = tabOverview(s, recs, courses, notes); wireBookings(body); }
-    if (state.tab === 'progress') body.innerHTML = tabProgress(s, courses);
-    if (state.tab === 'notes') body.innerHTML = tabNotes(notes);
+    if (state.tab === 'progress') { body.innerHTML = tabProgress(s); wireProgress(body); }
     if (state.tab === 'details') { body.innerHTML = tabDetails(s); wireDetails(s); }
     const sa = document.getElementById('show-all'); if (sa) sa.onclick = () => { state.showAll = true; render(); };
     body.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { state.tab = b.dataset.go; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
@@ -235,8 +235,13 @@
   function invoiceBox(b) {
     if (!b.invoiceNo) return '';
     const due = Math.max(0, (b.invoiceTotal || 0) - (b.amountPaid || 0));
-    return `<div class="inv-box"><div><b>Invoice ${esc(b.invoiceNo)}</b>${b.invoiceTotal ? `<span>Total ${esc(money(b.invoiceCurrency, b.invoiceTotal))} · Paid ${esc(money(b.invoiceCurrency, b.amountPaid))} · ${due > 0.004 ? '<b>Due ' + esc(money(b.invoiceCurrency, due)) + '</b>' : '<b>Paid in full</b>'}</span>` : ''}</div>
-      ${b.invoiceUrl ? `<a class="btn" href="${esc(b.invoiceUrl)}" target="_blank" rel="noopener">View invoice</a>` : ''}</div>`;
+    const status = !b.invoiceTotal ? '' : due > 0.004 ? `<span class="pill fail">Due ${esc(money(b.invoiceCurrency, due))}</span>` : '<span class="pill pass">✓ Paid in full</span>';
+    return `<details class="mat-det inv-det"><summary><span>${IC.file} Invoice ${esc(b.invoiceNo)}</span>${status}</summary>
+      <div class="inv-body">${b.invoiceTotal ? `<div class="kv"><span>Total</span><b>${esc(money(b.invoiceCurrency, b.invoiceTotal))}</b></div>
+        <div class="kv"><span>Paid</span><b>${esc(money(b.invoiceCurrency, b.amountPaid))}</b></div>
+        <div class="kv"><span>${due > 0.004 ? 'Still to pay' : 'Balance'}</span><b>${esc(money(b.invoiceCurrency, due))}</b></div>` : ''}
+        <p class="hint" style="margin:6px 0 0">Use the invoice number <b>${esc(b.invoiceNo)}</b> as your payment reference.</p>
+        ${b.invoiceUrl ? `<div class="form-actions"><a class="btn" href="${esc(b.invoiceUrl)}" target="_blank" rel="noopener">View invoice (PDF)</a></div>` : ''}</div></details>`;
   }
   function bookingCards() {
     const today = new Date().toISOString().slice(0, 10);
@@ -337,7 +342,7 @@
           <div><b>${esc(c.type || 'Course')} · ${esc(c.code)}</b><span>${esc(fmtDate(c.startDate))}${c.endDate ? ' – ' + esc(fmtDate(c.endDate)) : ''}${c.venue ? ' · ' + esc(c.venue) : ''}${c.trainer ? ' · ' + esc(c.trainer) : ''}</span></div></li>`).join('') + '</ul>'
           : '<p class="hint">No courses recorded yet.</p>'}</div>
       <div class="card"><h2>${IC.chat} Latest from your trainer</h2>
-        ${latestNote ? noteHtml(latestNote) + (notes.length > 1 ? `<div class="form-actions"><button class="btn" data-go="notes">See all ${notes.length} notes</button></div>` : '') : '<p class="hint">No trainer notes yet.</p>'}</div>
+        ${latestNote ? noteHtml(latestNote, true) + `<div class="form-actions"><button class="btn" data-go="progress">${notes.length > 1 ? 'See all ' + notes.length + ' notes in My progress' : 'See My progress'}</button></div>` : '<p class="hint">No trainer notes yet.</p>'}</div>
       ${unlocked() ? `<div class="card full"><h2>${IC.book} Study tools</h2>
         <p class="hint">Quizzes, the manual and exam practice, all in the AGA Pocket Guide.</p>
         <div class="form-actions" style="margin-top:0">
@@ -360,63 +365,129 @@
   }
   const badge = p => p == null ? '<span class="badge pend">Not yet</span>' : p >= CFG.PASS_MARK ? '<span class="badge pass">PASS ' + p + '%</span>' : '<span class="badge fail">' + p + '%</span>';
 
-  function tabProgress(s, courses) {
+  // ---------- My progress: one student record, in sections that open with a tap ----------
+  // Each section header shows the result at a glance; inside are the scores and the
+  // trainer's feedback for that area. Open sections stay open when the page redraws.
+  const pill = (state, text) => `<span class="pill ${state}">${text}</span>`;
+  const pctPill = p => p == null ? pill('pend', 'Not assessed') : p >= CFG.PASS_MARK ? pill('pass', '✓ ' + p + '%') : pill('fail', p + '%');
+  const tenPill = v => v == null ? pill('pend', 'Not assessed') : v >= R.ATTR_PASS ? pill('pass', '✓ ' + v + '/10') : pill('fail', v + '/10');
+  const notesChip = n => n ? `<span class="pill note-n" title="Trainer feedback">${IC.chat}${n}</span>` : '';
+  function sec(id, icon, title, sub, right, body, nested) {
+    const open = state.open && state.open[id];
+    return `<details class="sec${nested ? ' sub' : ''}" data-sec="${esc(id)}"${open ? ' open' : ''}><summary>
+      ${icon ? `<span class="sec-ic">${icon}</span>` : ''}<span class="sec-t"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span>
+      <span class="sec-r">${right}</span></summary><div class="sec-b">${body}</div></details>`;
+  }
+  function noteHtml(n, showArea) {
+    return `<div class="note"><div class="meta">${showArea ? `<b>${esc(n.area)}</b> · ` : ''}${n.trainer ? '<b>' + esc(n.trainer) + '</b>' : 'Trainer'}${n.course ? ' · ' + esc(n.course) : ''}${n.date ? ' · ' + esc(fmtDate(n.date)) : ''}</div><p>${esc(n.text)}</p></div>`;
+  }
+  function feedback(list, title) {
+    if (!list.length) return '';
+    return `<div class="fb"><h4>${IC.chat} ${title || 'Trainer feedback'}</h4><div class="notes">${list.map(n => noteHtml(n)).join('')}</div></div>`;
+  }
+  function tenBars(rows) {
+    return '<div class="bars">' + rows.map(r => {
+      const cls = r.score == null ? 'none' : r.score >= R.ATTR_PASS ? '' : r.score >= 5 ? 'mid' : 'low';
+      return `<div class="bar-row"><span class="lbl">${esc(r.label)}</span><span class="val">${r.score == null ? '—' : r.score + '/10'}</span>
+        <div class="bar"><i class="${cls}" style="width:${r.score == null ? 0 : Math.min(100, r.score * 10)}%"></i><span class="pass" style="left:${R.ATTR_PASS * 10}%"></span></div></div>`;
+    }).join('') + '</div>';
+  }
+
+  function tabProgress(s) {
+    const notes = R.allComments(s);
+    const by = k => notes.filter(n => [].concat(k).includes(n.key));
     const out = [];
-    const ngCourses = R.coursesOfType(s, 'Nature Guide'), tgCourses = R.coursesOfType(s, 'Trails Guide');
-    ngCourses.forEach(c => {
-      const sc = R.ngScores(s, c);
-      out.push(`<div class="card"><h2>${IC.book} Nature Guide theory</h2><p class="hint">${esc(c.code)} · ${esc(fmtDate(c.startDate))} · overall ${badge(overallPct(sc))}. The line marks the ${CFG.PASS_MARK}% pass mark.</p>${bars(sc)}
-        ${c.assessment && c.assessment.natureGuidePractical ? `<h3>Practical</h3><p>${esc(c.assessment.natureGuidePractical)}</p>` : ''}</div>`);
+    const notYet = '<p class="hint" style="margin:0">Your marks appear here as soon as your trainer captures them.</p>';
+
+    // Nature Guide theory: one section per course
+    const ngCourses = R.coursesOfType(s, 'Nature Guide');
+    const ngNotes = by('ngComments');
+    ngCourses.forEach((c, i) => {
+      const sc = R.ngScores(s, c), p = overallPct(sc), has = sc.some(m => m.score != null);
+      const mine = ngNotes.filter(n => n.course === c.code || (!n.course && i === 0));
+      const prac = c.assessment && c.assessment.natureGuidePractical;
+      out.push(sec('ng-' + c.code, IC.book, 'Nature Guide theory', esc(c.code) + ' · ' + esc(fmtDate(c.startDate)), pctPill(has ? p : null) + notesChip(mine.length),
+        (has ? `<p class="hint">Pass mark ${CFG.PASS_MARK}% (the line on each bar).</p>${bars(sc)}` : notYet) +
+        (prac ? `<div class="kv"><span>Practical</span><b>${esc(prac)}</b></div>` : '') + feedback(mine)));
     });
     if (!ngCourses.length && s.modules && Object.values(s.modules).some(v => v)) {
       const sc = R.ngScores(s, null);
-      out.push(`<div class="card"><h2>${IC.book} Nature Guide theory</h2><p class="hint">Overall ${badge(overallPct(sc))}</p>${bars(sc)}</div>`);
+      out.push(sec('ng-legacy', IC.book, 'Nature Guide theory', '', pctPill(overallPct(sc)) + notesChip(ngNotes.length), bars(sc) + feedback(ngNotes)));
     }
-    tgCourses.forEach(c => {
-      const sc = R.trailsScores(s, c);
-      const arh = (c.assessment && c.assessment.arh) || {};
-      out.push(`<div class="card"><h2>${IC.walk} Trails Guide theory</h2><p class="hint">${esc(c.code)} · ${esc(fmtDate(c.startDate))} · overall ${badge(overallPct(sc))}</p>${bars(sc)}
-        <h3>Advanced Rifle Handling</h3><table class="tbl">${R.ARH.map(([k, l]) => `<tr><td>${esc(l)}</td><td class="num">${arh[k] === 'Yes' ? '<span class="badge pass">Competent</span>' : arh[k] === 'No' ? '<span class="badge fail">Not yet</span>' : '<span class="badge pend">—</span>'}</td></tr>`).join('')}</table></div>`);
-    });
-    const groups = [['attributes', 'General attributes'], ['comm', 'Communication'], ['guiding', 'Guiding skills']];
-    const used = {};
-    const attrHtml = groups.map(([g, label]) => {
-      const c = R.latestWith(s, g); if (c) used[c.code] = 1;
-      const rows = R.attrScores(s, c, g); return rows.some(r => r.score != null) ? `<h3>${label}</h3>${bars(rows, { ten: true })}` : '';
-    }).join('');
-    const codes = Object.keys(used);
-    if (attrHtml) out.push(`<div class="card"><h2>${IC.star} Attributes and guiding skills</h2><p class="hint">Scored 1–10 by your trainer${codes.length ? ' on ' + esc(codes.join(', ')) : ''}.</p>${attrHtml}</div>`);
 
-    const ls = s.lifetimeStats || {}, e = ls.encounters || {};
+    // Trails Guide theory and rifle handling
+    const arhNotes = by('arhComments');
+    R.coursesOfType(s, 'Trails Guide').forEach((c, i) => {
+      const sc = R.trailsScores(s, c), has = sc.some(m => m.score != null), arh = (c.assessment && c.assessment.arh) || {};
+      const comp = R.ARH.filter(([k]) => arh[k] === 'Yes').length, done = R.ARH.filter(([k]) => arh[k] === 'Yes' || arh[k] === 'No').length;
+      const mine = arhNotes.filter(n => n.course === c.code || (!n.course && i === 0));
+      out.push(sec('tg-' + c.code, IC.walk, 'Trails Guide & rifle handling', esc(c.code) + ' · ' + esc(fmtDate(c.startDate)),
+        pctPill(has ? overallPct(sc) : null) + (done ? pill(comp === R.ARH.length ? 'pass' : 'fail', 'ARH ' + comp + '/' + R.ARH.length) : '') + notesChip(mine.length),
+        (has ? `<p class="hint">Theory pass mark ${CFG.PASS_MARK}%.</p>${bars(sc)}` : notYet) +
+        `<h4>Advanced Rifle Handling</h4><table class="tbl">${R.ARH.map(([k, l]) => `<tr><td>${esc(l)}</td><td class="num">${arh[k] === 'Yes' ? '<span class="badge pass">Competent</span>' : arh[k] === 'No' ? '<span class="badge fail">Not yet</span>' : '<span class="badge pend">—</span>'}</td></tr>`).join('')}</table>` +
+        feedback(mine)));
+    });
+
+    // Attributes and guiding skills: each section passes at 7.5/10, overall at 75%
+    const attrNoteKey = { attributes: 'attrGenericComments', comm: 'attrCommComments', guiding: 'attrGuidingComments' };
+    const secs = ['attributes', 'comm', 'guiding'].map(g => R.attrSection(s, g)).filter(x => x.avg != null || by(attrNoteKey[x.key]).length);
+    if (secs.length) {
+      const overall = R.attrOverall(s), codes = [...new Set(secs.map(x => x.course && x.course.code).filter(Boolean))];
+      const inner = secs.map(x => {
+        const mine = by(attrNoteKey[x.key]);
+        const weak = x.rows.filter(r => r.score != null && r.score < R.ATTR_PASS && R.TIPS[r.key]);
+        return sec('at-' + x.key, '', esc(x.label), x.avg != null ? 'average of ' + x.rows.filter(r => r.score != null).length + ' scores' : '', tenPill(x.avg) + notesChip(mine.length),
+          (x.avg != null ? tenBars(x.rows) : notYet) +
+          (weak.length ? `<div class="tips"><h4>${IC.up} How to improve</h4><ul>${weak.map(r => `<li><b>${esc(r.label)}</b> ${esc(R.TIPS[r.key])}</li>`).join('')}</ul></div>` : '') +
+          feedback(mine), true);
+      }).join('');
+      const allMine = secs.reduce((a, x) => a + by(attrNoteKey[x.key]).length, 0);
+      out.push(sec('attr', IC.star, 'Attributes & guiding skills', 'Scored 1–10 by your trainer' + (codes.length ? ' · ' + esc(codes.join(', ')) : ''),
+        pctPill(overall) + notesChip(allMine),
+        `<p class="hint">Pass mark: an average of <b>${R.ATTR_PASS}/10</b> in each section, and <b>${CFG.PASS_MARK}%</b> overall. Tap a section for the scores.</p>${inner}`));
+    }
+
+    // Walking hours and encounters
+    const ls = s.lifetimeStats || {}, e = ls.encounters || {}, encNotes = by('encComments');
     const encRows = [['eb', 'Elephant bull'], ['ec', 'Elephant cow'], ['bb', 'Buffalo bull'], ['bc', 'Buffalo cow'], ['lion', 'Lion / leopard']];
-    if (ls.walkTotalHrs || Object.values(e).some(v => +v)) out.push(`<div class="card"><h2>${IC.walk} Walking and encounters</h2><p class="hint">Your totals across all courses.</p>
-      <table class="tbl"><tr><th>Walking hours</th><th class="num">Hours</th></tr>
+    if (ls.walkTotalHrs || Object.values(e).some(v => +v) || encNotes.length) out.push(sec('walk', IC.walk, 'Walking & encounters', 'Totals across all your courses',
+      (ls.walkTotalHrs ? pill('info', esc(ls.walkTotalHrs) + ' hrs') : '') + notesChip(encNotes.length),
+      `<table class="tbl"><tr><th>Walking hours</th><th class="num">Hours</th></tr>
         <tr><td>Lead</td><td class="num">${esc(ls.walkLeadHrs || 0)}</td></tr><tr><td>Back-up</td><td class="num">${esc(ls.walkBackupHrs || 0)}</td></tr>
         <tr><td>Participant</td><td class="num">${esc(ls.walkParticipHrs || 0)}</td></tr><tr><td><b>Total</b></td><td class="num"><b>${esc(ls.walkTotalHrs || 0)}</b></td></tr></table>
-      <h3>Dangerous game encounters on foot</h3><div class="scroll-x"><table class="tbl"><tr><th></th><th class="num">Lead</th><th class="num">Back-up</th><th class="num">Participant</th></tr>
-        ${encRows.map(([k, l]) => `<tr><td>${l}</td><td class="num">${esc(e[k + 'Lead'] || 0)}</td><td class="num">${esc(e[k + 'Bu'] || 0)}</td><td class="num">${esc(e[k + 'Part'] || 0)}</td></tr>`).join('')}</table></div></div>`);
+      <h4>Dangerous game encounters on foot</h4><div class="scroll-x"><table class="tbl"><tr><th></th><th class="num">Lead</th><th class="num">Back-up</th><th class="num">Participant</th></tr>
+        ${encRows.map(([k, l]) => `<tr><td>${l}</td><td class="num">${esc(e[k + 'Lead'] || 0)}</td><td class="num">${esc(e[k + 'Bu'] || 0)}</td><td class="num">${esc(e[k + 'Part'] || 0)}</td></tr>`).join('')}</table></div>` + feedback(encNotes)));
 
+    // Benchmarking
     const bm = (s.benchmarkingData || []).slice().sort((a, b) => String(b.year).localeCompare(String(a.year)));
-    if (bm.length) out.push(`<div class="card"><h2>${IC.chart} Benchmarking exams</h2><p class="hint">The yearly industry benchmarking exam.</p><div class="scroll-x"><table class="tbl">
-      <tr><th>Year</th><th class="num">Theory</th><th class="num">Slides</th><th class="num">Sounds</th><th class="num">Overall</th></tr>
-      ${bm.map(b => `<tr><td>${esc(b.year)}</td>${['theory', 'slides', 'sounds', 'overall'].map(k => { const p = R.pct(b[k + 'Score'], b[k + 'Max']); return `<td class="num">${p == null ? '—' : badge(p)}</td>`; }).join('')}</tr>`).join('')}</table></div></div>`);
+    if (bm.length) out.push(sec('bench', IC.chart, 'Benchmarking exams', 'The yearly industry benchmarking exam · latest ' + esc(bm[0].year),
+      pctPill(R.pct(bm[0].overallScore, bm[0].overallMax)),
+      `<div class="scroll-x"><table class="tbl"><tr><th>Year</th><th class="num">Theory</th><th class="num">Slides</th><th class="num">Sounds</th><th class="num">Overall</th></tr>
+      ${bm.map(b => `<tr><td>${esc(b.year)}</td>${['theory', 'slides', 'sounds', 'overall'].map(k => { const p = R.pct(b[k + 'Score'], b[k + 'Max']); return `<td class="num">${p == null ? '—' : badge(p)}</td>`; }).join('')}</tr>`).join('')}</table></div>`));
 
+    // General trainer feedback (not tied to one area)
+    const gen = by('generalComments');
+    if (gen.length) out.push(sec('general', IC.chat, 'General trainer feedback', 'Overall comments from your trainers', notesChip(gen.length), feedback(gen, 'Feedback')));
+
+    // Registration and records
     const mem = [];
     if (s.bqaNo) mem.push(['BQA registration', s.bqaNo]);
     if (s.fgasaNo) mem.push(['FGASA registration', s.fgasaNo]);
-    if (mem.length || s.fileUrl) out.push(`<div class="card"><h2>${IC.file} Registration and records</h2><table class="tbl">${mem.map(([l, v]) => `<tr><td>${l}</td><td class="num">${esc(v)}</td></tr>`).join('')}</table>
-      ${s.fileUrl ? `<div class="form-actions"><a class="btn" href="${esc(s.fileUrl)}" target="_blank" rel="noopener">Download my profile (PDF)</a></div>` : ''}</div>`);
+    if (mem.length || s.fileUrl) out.push(sec('records', IC.file, 'Registration & records', 'BQA, FGASA and your profile document', '',
+      (mem.length ? `<table class="tbl">${mem.map(([l, v]) => `<tr><td>${l}</td><td class="num">${esc(v)}</td></tr>`).join('')}</table>` : '') +
+      (s.fileUrl ? `<div class="form-actions"><a class="btn" href="${esc(s.fileUrl)}" target="_blank" rel="noopener">Download my profile (PDF)</a></div>` : '')));
 
     if (!out.length) return '<div class="grid"><div class="card full"><p class="hint">No results have been recorded yet. They appear here as soon as your trainer captures them.</p></div></div>';
-    return '<div class="grid">' + out.join('') + '</div>';
+    return `<div class="grid"><div class="card full record"><div class="rec-head"><h2>${IC.chart} My progress</h2>
+        <div class="rec-tools"><button class="btn" data-all="open">Open all</button><button class="btn" data-all="close">Close all</button></div></div>
+      <p class="hint">Your results and your trainers’ feedback, section by section. Tap a section to open it.</p>${out.join('')}</div></div>`;
   }
-
-  function noteHtml(n) {
-    return `<div class="note"><div class="meta"><b>${esc(n.area)}</b>${n.trainer ? ' · ' + esc(n.trainer) : ''}${n.course ? ' · ' + esc(n.course) : ''}${n.date ? ' · ' + esc(fmtDate(n.date)) : ''}</div><p>${esc(n.text)}</p></div>`;
-  }
-  function tabNotes(notes) {
-    return `<div class="grid"><div class="card full"><h2>${IC.chat} Notes from your trainers</h2><p class="hint">Feedback written on your courses, newest first.</p>
-      ${notes.length ? '<div class="notes">' + notes.map(noteHtml).join('') + '</div>' : '<p class="hint">No trainer notes yet.</p>'}</div></div>`;
+  function wireProgress(body) {
+    body.querySelectorAll('details.sec').forEach(d => d.addEventListener('toggle', () => { state.open = state.open || {}; state.open[d.dataset.sec] = d.open; }));
+    body.querySelectorAll('[data-all]').forEach(b => b.onclick = () => {
+      const open = b.dataset.all === 'open';
+      body.querySelectorAll('details.sec').forEach(d => { d.open = open; });
+    });
   }
 
   // ---------- details, photo, documents ----------

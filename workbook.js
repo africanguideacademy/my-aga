@@ -15,14 +15,18 @@
   function card(list, locked, message) {
     if (locked) return `<div class="card full"><h2>✍️ Digital workbooks 🔒</h2><p class="hint" style="margin:0">${esc(message || 'Your workbooks open here once your deposit has been received.')}</p></div>`;
     if (!list || !list.length) return '';
-    const done = list.filter(w => w.status === 'Submitted').length;
+    const done = list.filter(w => w.status === 'Submitted').length, exam = list.filter(w => w.examinable).length;
+    const going = list.filter(w => w.status === 'In progress').length;
+    // Folded by default so the page stays tidy; opens with a tap (and stays open while you are on the page)
     return `<div class="card full"><h2>✍️ Digital workbooks</h2>
-      <p class="hint">Work on your Nature Guide workbooks here: everything saves as you type, so you can stop and carry on later on any device. When a chapter is done, submit it and we email you the completed PDF. ${done} of ${list.filter(w => w.examinable).length} submitted.</p>
+      <p class="hint">Everything saves as you type, so you can stop and carry on later on any device. Submit a chapter when it’s done and we email you the completed PDF.</p>
+      <details class="mat-det wb-det"${window.__wbOpen ? ' open' : ''} ontoggle="window.__wbOpen=this.open"><summary><span>Nature Guide workbooks</span>
+        <span class="pill ${done >= exam && exam ? 'pass' : 'info'}">${done} of ${exam} submitted</span>${going ? `<span class="pill pend">${going} in progress</span>` : ''}</summary>
       <ul class="wb-list">${list.map(w => `<li><a href="#/wb/${esc(w.id)}">
         <span class="wb-ch">${w.chapter}</span>
         <span class="wb-t"><b>${esc(w.title)}</b>${w.examinable ? '' : ' <span class="wb-opt">optional · not examinable</span>'}
           <span class="wb-bar"><i style="width:${w.status === 'Submitted' ? 100 : w.percent}%"></i></span></span>
-        <span class="wb-st ${w.status === 'Submitted' ? 'ok' : w.status === 'In progress' ? 'go' : ''}">${w.status === 'Submitted' ? '✓ Submitted' : w.status === 'In progress' ? w.percent + '%' : 'Start'}</span></a></li>`).join('')}</ul></div>`;
+        <span class="wb-st ${w.status === 'Submitted' ? 'ok' : w.status === 'In progress' ? 'go' : ''}">${w.status === 'Submitted' ? '✓ Submitted' : w.status === 'In progress' ? w.percent + '%' : 'Start'}</span></a></li>`).join('')}</ul></details></div>`;
   }
 
   // ---------- one workbook ----------
