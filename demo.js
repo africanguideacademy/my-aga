@@ -53,14 +53,29 @@
     log: { columns: ['Date', 'Section', 'Time spent', 'Trainer/mentor initials'], rows: 3 } };
   const bookings = [Object.assign({ bookingId: 'BK-DEMO01', groupRef: 'BK-DEMO01', courseCode: 'KWP 2701 NG A', courseType: 'Nature Guide', startDate: '2027-01-11', endDate: '2027-01-24', venue: 'Kwapa Camp', camp: 'Kwapa', status: 'Deposit paid', respondedOn: '', reason: '' }, inv),
     Object.assign({ bookingId: 'BK-DEMO02', groupRef: 'BK-DEMO01', courseCode: 'KWP 2701 NG B', courseType: 'Nature Guide', startDate: '2027-01-25', endDate: '2027-02-07', venue: 'Kwapa Camp', camp: 'Kwapa', status: 'Deposit paid', respondedOn: '', reason: '' }, inv)];
-  const docs = [{ name: 'Passport / Omang copy - 2026-03-02 (uploaded by student).pdf', url: '#', size: '412 KB', date: '2026/03/02', mimeType: 'application/pdf' }];
+  const docs = [{ name: 'Passport / Omang copy - 2026-03-02 (uploaded by student).pdf', url: '#', size: '412 KB', date: '2026/03/02', mimeType: 'application/pdf' },
+    { name: 'Certificate - Nature Guide NG-2026-03.pdf', url: '#', size: '220 KB', date: '2026/04/30', mimeType: 'application/pdf' }];
   const wait = ms => new Promise(r => setTimeout(r, ms));
+  let notes = [
+    { id: 'N-DEMO1', kind: 'Goal', title: 'Learn 20 bird calls before the FGASA exam', text: '', done: false, created: '2026-11-20T08:00:00Z', updated: '2026-11-20T08:00:00Z' },
+    { id: 'N-DEMO2', kind: 'Goal', title: 'Finish workbook 1 (Geology)', text: '', done: true, created: '2026-11-18T08:00:00Z', updated: '2026-11-22T08:00:00Z' },
+    { id: 'N-DEMO3', kind: 'Note', title: 'Elephant musth', text: 'Temporal gland secretion, dribbling urine, green penis sheath. Bulls in musth are unpredictable: give extra space.', done: false, created: '2026-11-21T08:00:00Z', updated: '2026-11-21T08:00:00Z' }];
 
   window.MyAgaDemo = {
     // made-up workbook for the demo
     // (kept in this object, not in the page code, so nothing real is published here)
     async call(p) {
       await wait(350);
+      if (p.portal === 'notes') return { ok: true, notes: JSON.parse(JSON.stringify(notes)) };
+      if (p.portal === 'noteSave') {
+        const n = p.note || {}, now = new Date().toISOString();
+        if (!String(n.title || '').trim() && !String(n.text || '').trim()) return { ok: false, error: 'Write something first.' };
+        const i = notes.findIndex(x => x.id === n.id), id = i > -1 ? n.id : 'N-' + Math.random().toString(16).slice(2, 10).toUpperCase();
+        const rec = { id, kind: n.kind === 'Goal' ? 'Goal' : 'Note', title: n.title || '', text: n.text || '', done: !!n.done, created: i > -1 ? notes[i].created : now, updated: now };
+        if (i > -1) notes[i] = rec; else notes.unshift(rec);
+        return { ok: true, id, updated: now };
+      }
+      if (p.portal === 'noteDelete') { notes = notes.filter(x => x.id !== p.id); return { ok: true }; }
       switch (p.portal) {
         case 'login':
           return p.studentId.toUpperCase() === 'DEMO-0001' && p.pin === '123456'

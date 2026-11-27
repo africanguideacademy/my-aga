@@ -153,6 +153,8 @@
     document.getElementById('top-name').textContent = r.student.firstNames + ' ' + r.student.surname;
     render();
     authed({ portal: 'docs' }).then(d => { state.docs = d.ok ? d.docs : []; if (state.tab === 'details') render(); });
+    // notes load quietly for the open-goals count; never redraw a tab the student may be typing in
+    authed({ portal: 'notes' }).then(r => { if (state.notes == null) state.notes = r && r.ok ? r.notes : null; if (state.tab === 'overview' || state.tab === 'progress') render(); });
     authed({ portal: 'materials' }).then(m => { state.materials = m && m.ok ? m : null; if (state.tab === 'overview') render(); });
     authed({ portal: 'workbooks' }).then(w => { state.workbooks = w && w.ok ? w : null; if (state.tab === 'overview') render(); });
   }
@@ -171,8 +173,9 @@
 
     const avatar = s.photoThumb ? `<img class="avatar" src="${esc(s.photoThumb)}" alt="">` : `<div class="avatar">${esc(initials(s))}</div>`;
     const quals = String(s.qualification || '').split(',').map(q => q.trim()).filter(Boolean);
-    if (state.tab === 'notes') state.tab = 'progress';   // trainer notes now live inside My progress
-    const tabs = [['overview', 'To do', IC.list, todoCount], ['progress', 'My progress', IC.chart], ['details', 'My details', IC.user]];
+    // Trainer feedback lives inside My progress; "notes" is now the student's own notes
+    const openGoals = (state.notes || []).filter(n => n.kind === 'Goal' && !n.done).length;
+    const tabs = [['overview', 'To do', IC.list, todoCount], ['progress', 'My progress', IC.chart], ['notes', 'My notes', IC.book, openGoals], ['details', 'My details', IC.user]];
 
     $app.innerHTML = `
       ${DEMO ? '<div class="demo-banner">Demo mode: this is a made-up student, and nothing is saved.</div>' : ''}
@@ -194,9 +197,11 @@
     $app.querySelectorAll('.tab').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
     const body = document.getElementById('tab-body');
     if (state.tab === 'overview') { body.innerHTML = tabOverview(s, recs, courses, notes); wireBookings(body); }
-    if (state.tab === 'progress') { body.innerHTML = tabProgress(s); wireProgress(body); }
+    if (state.tab === 'progress') body.innerHTML = tabProgress(s);
+    if (state.tab === 'notes') { body.innerHTML = tabMyNotes(); wireMyNotes(body); }
     if (state.tab === 'details') { body.innerHTML = tabDetails(s); wireDetails(s); }
-    const sa = document.getElementById('show-all'); if (sa) sa.onclick = () => { state.showAll = true; render(); };
+    if (state.tab === 'progress' || state.tab === 'details' || state.tab === 'notes') wireProgress(body);   // remember open sections
+    const sa =document.getElementById('show-all'); if (sa) sa.onclick = () => { state.showAll = true; render(); };
     body.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { state.tab = b.dataset.go; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
   }
 
@@ -280,7 +285,7 @@
   function wireBookings(root) {
     // "Upload proof of payment": go to My documents with the type preselected
     root.querySelectorAll('[data-pop]').forEach(btn => btn.onclick = () => {
-      state.popBooking = btn.dataset.pop; state.tab = 'details'; render();
+      state.popBooking = btn.dataset.pop; state.tab = 'details'; state.open = state.open || {}; state.open['d-docs'] = true; render();
       const sel = document.getElementById('doc-type'); if (sel) sel.value = 'Proof of payment';
       const card = sel && sel.closest('.card'); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
       toast('Choose your proof of payment file (PDF or photo).');
@@ -469,13 +474,7 @@
     const gen = by('generalComments');
     if (gen.length) out.push(sec('general', IC.chat, 'General trainer feedback', 'Overall comments from your trainers', notesChip(gen.length), feedback(gen, 'Feedback')));
 
-    // Registration and records
-    const mem = [];
-    if (s.bqaNo) mem.push(['BQA registration', s.bqaNo]);
-    if (s.fgasaNo) mem.push(['FGASA registration', s.fgasaNo]);
-    if (mem.length || s.fileUrl) out.push(sec('records', IC.file, 'Registration & records', 'BQA, FGASA and your profile document', '',
-      (mem.length ? `<table class="tbl">${mem.map(([l, v]) => `<tr><td>${l}</td><td class="num">${esc(v)}</td></tr>`).join('')}</table>` : '') +
-      (s.fileUrl ? `<div class="form-actions"><a class="btn" href="${esc(s.fileUrl)}" target="_blank" rel="noopener">Download my profile (PDF)</a></div>` : '')));
+    // (Registration & certificates now live under My details)
 
     if (!out.length) return '<div class="grid"><div class="card full"><p class="hint">No results have been recorded yet. They appear here as soon as your trainer captures them.</p></div></div>';
     return `<div class="grid"><div class="card full record"><div class="rec-head"><h2>${IC.chart} My progress</h2>
@@ -509,27 +508,115 @@
       return `<div class="fld"><label for="f-${k}">${label}</label><input id="f-${k}" name="${k}" type="${type}" value="${esc(v)}"${type === 'email' ? ' autocomplete="email"' : type === 'tel' ? ' autocomplete="tel"' : ''}></div>`;
     };
     const docs = state.docs;
-    return `<div class="grid">
-      <form class="card full" id="details-form"><h2>${IC.user} My personal details</h2>
-        <p class="hint">Please keep these correct. They are used for your certificates and BQA/FGASA registration. Changes save straight to your AGA profile.</p>
-        <div class="form">${FIELDS.map(field).join('')}</div>
-        <div class="form-actions"><button class="btn btn-primary" id="save-details">Save changes</button><span class="note-s" id="dirty-note"></span></div>
-      </form>
-      <div class="card"><h2>${IC.user} Profile photo</h2><p class="hint">A clear, passport-style photo: face the camera, plain background, no sunglasses or hat.</p>
-        <div class="photo-edit">${s.photoThumb ? `<img class="avatar" src="${esc(s.photoThumb)}" alt="">` : `<div class="avatar">${esc(initials(s))}</div>`}
+    const fileList = list => '<ul class="files">' + list.map(d => `<li>${IC.file}<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.name)}</a><span>${esc(d.date)}</span></li>`).join('') + '</ul>';
+    const certs = (docs || []).filter(d => /certific|diploma|result/i.test(d.name));
+    const others = (docs || []).filter(d => !certs.includes(d));
+    const done = (s.coursesData || []).filter(c => c.endDate && c.endDate < new Date().toISOString().slice(0, 10))
+      .sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
+    const missing = ['cellNumber', 'email', 'dateOfBirth', 'omangPassport', 'nationality'].filter(k => !s[k]).length;
+    // Registration & certificates opens by default; the rest fold away until needed
+    if (!state.open || state.open['d-reg'] === undefined) { state.open = state.open || {}; state.open['d-reg'] = true; }
+    const reg = `<div class="kv"><span>Qualification sought</span><b>${esc(s.qualification || '—')}</b></div>
+      <div class="kv"><span>BQA registration no.</span><b>${esc(s.bqaNo || 'Not yet registered')}</b></div>
+      <div class="kv"><span>FGASA membership no.</span><b>${esc(s.fgasaNo || '—')}</b></div>
+      <h4>Courses completed</h4>${done.length ? '<ul class="files">' + done.map(c => `<li>${IC.cal}<span style="flex:1;color:var(--ink)">${esc(c.type || 'Course')} · ${esc(c.code)}</span><span>${esc(fmtDate(c.endDate))}</span></li>`).join('') + '</ul>' : '<p class="hint" style="margin:0">None yet.</p>'}
+      <h4>Certificates</h4>${docs == null ? '<p class="hint" style="margin:0">Loading…</p>' : certs.length ? fileList(certs) : '<p class="hint" style="margin:0">Your certificates appear here once the Academy adds them to your student folder. Have one from elsewhere (e.g. First Aid)? Upload it under My documents.</p>'}
+      ${s.fileUrl ? `<div class="form-actions"><a class="btn" href="${esc(s.fileUrl)}" target="_blank" rel="noopener">Download my AGA profile (PDF)</a></div>` : ''}`;
+    return `<div class="grid"><div class="card full record"><div class="rec-head"><h2>${IC.user} My details</h2></div>
+      <p class="hint">Your registration, certificates, personal details and documents. Tap a section to open it.</p>
+      ${sec('d-reg', IC.star, 'Registration & certificates', 'BQA, FGASA, courses completed and certificates', certs.length ? pill('pass', certs.length + ' certificate' + (certs.length > 1 ? 's' : '')) : '', reg)}
+      ${sec('d-personal', IC.user, 'Personal details', 'Used for your certificates and BQA/FGASA registration', missing ? pill('fail', missing + ' missing') : pill('pass', '✓ Complete'),
+        `<form id="details-form"><p class="hint">Please keep these correct. Changes save straight to your AGA profile.</p>
+          <div class="form">${FIELDS.map(field).join('')}</div>
+          <div class="form-actions"><button class="btn btn-primary" id="save-details">Save changes</button><span class="note-s" id="dirty-note"></span></div></form>`)}
+      ${sec('d-photo', IC.user, 'Profile photo', 'Passport-style: face the camera, plain background', s.photoUrl ? pill('pass', '✓ Uploaded') : pill('fail', 'Missing'),
+        `<div class="photo-edit">${s.photoThumb ? `<img class="avatar" src="${esc(s.photoThumb)}" alt="">` : `<div class="avatar">${esc(initials(s))}</div>`}
           <label class="btn btn-primary">Upload new photo<input type="file" id="photo-in" accept="image/*" hidden></label></div>
-        <div id="photo-msg" style="margin-top:10px"></div></div>
-      <div class="card"><h2>${IC.file} My documents</h2><p class="hint">Upload copies of your passport/Omang, certificates and CV. They are saved in your AGA student folder. PDF or photo, max 10 MB.</p>
+        <div id="photo-msg" style="margin-top:10px"></div>`)}
+      ${sec('d-docs', IC.file, 'My documents', 'Passport/Omang, licence, CV, proof of payment', docs && others.length ? pill('info', others.length + ' file' + (others.length > 1 ? 's' : '')) : '',
+        `<p class="hint">Saved in your AGA student folder. PDF or photo, max 10 MB.</p>
         <div class="upload">
           <div class="fld"><label for="doc-type">What are you uploading?</label><select id="doc-type">${(state.me.docTypes || []).map(t => `<option>${esc(t)}</option>`).join('')}</select></div>
           <label class="drop"><input type="file" id="doc-in" accept="application/pdf,image/*"><b>Choose a file</b><span>or take a photo with your phone</span></label>
           <div id="doc-msg"></div>
         </div>
-        <h3>Uploaded</h3>
-        ${docs == null ? '<p class="hint">Loading…</p>' : docs.length ? '<ul class="files">' + docs.map(d => `<li>${IC.file}<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.name)}</a><span>${esc(d.date)}</span></li>`).join('') + '</ul>' : '<p class="hint">Nothing uploaded yet.</p>'}
-      </div>
-      <div class="card full"><h2>${IC.key} PIN</h2><p class="hint">Change the 6-number PIN you use to log in to My AGA.</p><button class="btn" id="change-pin">Change my PIN</button></div>
-    </div>`;
+        <h4>Uploaded</h4>${docs == null ? '<p class="hint">Loading…</p>' : others.length ? fileList(others) : '<p class="hint">Nothing uploaded yet.</p>'}`)}
+      ${sec('d-pin', IC.key, 'Login & PIN', 'Change the 6-number PIN you log in with', '', '<button class="btn" id="change-pin" type="button">Change my PIN</button>')}
+    </div></div>`;
+  }
+
+  // ---------- My notes: the student's own private study notes and goals ----------
+  async function loadNotes() {
+    const r = await authed({ portal: 'notes' });
+    state.notes = r && r.ok ? r.notes : [];
+    if (state.tab === 'notes') render();
+  }
+  function tabMyNotes() {
+    if (state.notes == null) { loadNotes(); return '<div class="grid"><div class="card full"><p class="hint">Loading your notes…</p></div></div>'; }
+    const q = (state.noteQ || '').toLowerCase();
+    const match = n => !q || (n.title + ' ' + n.text).toLowerCase().includes(q);
+    const goals = state.notes.filter(n => n.kind === 'Goal' && match(n)).sort((a, b) => (a.done - b.done) || b.updated.localeCompare(a.updated));
+    const notes = state.notes.filter(n => n.kind !== 'Goal' && match(n));
+    const ed = state.noteEdit || { kind: 'Note' };
+    const when = d => d ? fmtDate(d.slice(0, 10)) : '';
+    return `<div class="grid"><div class="card full record">
+      <div class="rec-head"><h2>${IC.book} My notes</h2>${state.notes.length > 3 ? `<input class="note-search" id="note-q" placeholder="Search my notes" value="${esc(state.noteQ || '')}">` : ''}</div>
+      <p class="hint">Your private study notes and goals. Only you can see them, on any device you log in on.</p>
+      <form class="note-form" id="note-form">
+        <div class="seg"><label><input type="radio" name="kind" value="Note"${ed.kind !== 'Goal' ? ' checked' : ''}><span>📝 Note</span></label>
+          <label><input type="radio" name="kind" value="Goal"${ed.kind === 'Goal' ? ' checked' : ''}><span>🎯 Goal</span></label></div>
+        <input name="title" maxlength="120" placeholder="${ed.kind === 'Goal' ? 'e.g. Learn 20 bird calls before my exam' : 'Title, e.g. Elephant behaviour'}" value="${esc(ed.title || '')}">
+        <textarea name="text" rows="4" maxlength="5000" placeholder="Write your note…">${esc(ed.text || '')}</textarea>
+        <div class="form-actions" style="margin-top:0"><button class="btn btn-primary" id="note-save">${ed.id ? 'Save changes' : 'Add'}</button>
+          ${ed.id ? '<button type="button" class="btn" id="note-cancel">Cancel</button>' : ''}</div>
+      </form>
+      ${sec('n-goals', '🎯', 'My goals', goals.length ? goals.filter(g => g.done).length + ' of ' + goals.length + ' done' : 'Set yourself goals for your course', goals.filter(g => !g.done).length ? pill('info', goals.filter(g => !g.done).length + ' open') : '',
+        goals.length ? '<ul class="goals">' + goals.map(g => `<li class="${g.done ? 'done' : ''}"><label><input type="checkbox" data-goal="${esc(g.id)}"${g.done ? ' checked' : ''}><span><b>${esc(g.title || g.text)}</b>${g.title && g.text ? `<small>${esc(g.text)}</small>` : ''}</span></label>
+          <span class="n-act"><button class="btn" data-edit="${esc(g.id)}">Edit</button><button class="btn" data-del="${esc(g.id)}">Delete</button></span></li>`).join('') + '</ul>'
+          : '<p class="hint" style="margin:0">No goals yet. Choose 🎯 Goal above to add one.</p>')}
+      ${sec('n-notes', '📝', 'My study notes', notes.length + ' note' + (notes.length === 1 ? '' : 's'), '',
+        notes.length ? notes.map(n => sec('n-' + n.id, '', esc(n.title || n.text.slice(0, 60) || 'Note'), 'Updated ' + esc(when(n.updated)), '',
+          `<p class="note-text">${esc(n.text)}</p><div class="form-actions"><button class="btn" data-edit="${esc(n.id)}">Edit</button><button class="btn" data-del="${esc(n.id)}">Delete</button></div>`, true)).join('')
+          : '<p class="hint" style="margin:0">No notes yet. Use the box above to write your first one.</p>')}
+    </div></div>`;
+  }
+  function wireMyNotes(body) {
+    const f = document.getElementById('note-form'); if (!f) return;
+    f.querySelectorAll('[name=kind]').forEach(r => r.onchange = () => { state.noteEdit = Object.assign({}, state.noteEdit, { kind: r.value, title: f.title.value, text: f.text.value }); render(); });
+    f.addEventListener('submit', async e => {
+      e.preventDefault();
+      const note = Object.assign({}, state.noteEdit || {}, { kind: f.kind.value, title: f.title.value.trim(), text: f.text.value.trim() });
+      if (!note.title && !note.text) { toast('Write something first.', true); return; }
+      const btn = document.getElementById('note-save'); btn.disabled = true;
+      const r = await authed({ portal: 'noteSave', note });
+      btn.disabled = false;
+      if (!r.ok) { toast(r.error, true); return; }
+      const now = r.updated || new Date().toISOString(), i = state.notes.findIndex(n => n.id === r.id);
+      const saved = { id: r.id, kind: note.kind, title: note.title, text: note.text, done: !!note.done, created: i > -1 ? state.notes[i].created : now, updated: now };
+      if (i > -1) state.notes[i] = saved; else state.notes.unshift(saved);
+      state.open = state.open || {}; state.open[note.kind === 'Goal' ? 'n-goals' : 'n-notes'] = true;
+      state.noteEdit = { kind: note.kind }; toast(note.kind === 'Goal' ? 'Goal saved.' : 'Note saved.'); render();
+    });
+    const c = document.getElementById('note-cancel'); if (c) c.onclick = () => { state.noteEdit = null; render(); };
+    const q = document.getElementById('note-q');
+    if (q) q.oninput = () => { state.noteQ = q.value; render(); const n = document.getElementById('note-q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
+    body.querySelectorAll('[data-edit]').forEach(b => b.onclick = e => {
+      e.preventDefault(); state.noteEdit = Object.assign({}, state.notes.find(n => n.id === b.dataset.edit)); render();
+      document.getElementById('note-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    body.querySelectorAll('[data-del]').forEach(b => b.onclick = async e => {
+      e.preventDefault();
+      if (!confirm('Delete this ' + (state.notes.find(n => n.id === b.dataset.del) || {}).kind?.toLowerCase() + '? This can’t be undone.')) return;
+      const r = await authed({ portal: 'noteDelete', id: b.dataset.del });
+      if (!r.ok) { toast(r.error, true); return; }
+      state.notes = state.notes.filter(n => n.id !== b.dataset.del); toast('Deleted.'); render();
+    });
+    body.querySelectorAll('[data-goal]').forEach(cb => cb.onchange = async () => {
+      const g = state.notes.find(n => n.id === cb.dataset.goal); if (!g) return;
+      g.done = cb.checked; render();
+      const r = await authed({ portal: 'noteSave', note: g });
+      if (!r.ok) { g.done = !cb.checked; toast(r.error, true); render(); } else if (g.done) toast('Well done! Goal ticked off. 🎉');
+    });
   }
 
   function wireDetails(s) {
